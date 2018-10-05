@@ -876,14 +876,13 @@ struct GraphFuser {
 } // anonymous namespace
 
 void FuseGraph(std::shared_ptr<Graph>& graph) {
-  // NYI on Windows
-  #ifndef _WIN32
+  // Short-circuits if nothing is fusable
+  if (!canFuseOnCPU() && !canFuseOnGPU()) return;
 
   GraphFuser(graph->block()).run();
   // After FuseGraph some common subexpressions may come back
   EliminateCommonSubexpression(graph);
-
-  #endif
 }
 
-}}
+} // namespace jit 
+} // namespace torch

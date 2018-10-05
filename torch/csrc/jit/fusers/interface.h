@@ -14,13 +14,18 @@ namespace torch { namespace jit {
 
 constexpr int kCPUDevice = -1;
 
+// TODO: remove this, just for temporary compilation
 struct TORCH_API FusionHandle {
   virtual void run(Stack& inputs) = 0;
 
   virtual ~FusionHandle() = 0;
 };
 
-TORCH_API std::shared_ptr<FusionHandle> getFusionHandle(Node* fusion_group);
+// Returns true if the fusion_group was unregistered, false otherwise.
+TORCH_API bool registerFusion(Node* fusion_group);
+
+// Returns true if the fusion was run, false if a fallback was run.
+TORCH_API bool runFusion(Node* fusion_group, Stack& stack);
 
 TORCH_API bool canFuseOnCPU();
 TORCH_API bool canFuseOnGPU();

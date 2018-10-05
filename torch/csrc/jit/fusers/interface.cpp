@@ -1,6 +1,6 @@
 #include "torch/csrc/jit/fusers/interface.h"
 
-#include "torch/csrc/jit/fusers/Config.h"
+#include "torch/csrc/jit/fusers/config.h"
 
 #if USE_CPU_FUSER
   #include "torch/csrc/jit/fusers/cpu/interface.h"
@@ -20,39 +20,49 @@ bool cpu_fuser_enabled = false;
 
 } // namespace detail
 
-// Pure virtual destructor definition
+// Returns true if the fusion_group was unregistered, false otherwise.
+bool registerFusion(Node* fusion_group) {
+  return false;
+}
+
+// Returns true if the fusion was run, false if a fallback was run.
+bool runFusion(Node* fusion_group, Stack& stack) {
+  return false;
+}
+
+// TODO: remove me when fusion handle is removed
 FusionHandle::~FusionHandle() { }
 
-std::shared_ptr<FusionHandle> getFusionHandle(Node* fusion_group) {
-  const auto device = fusion_group->i(attr::device);
-  if (device == kCPUDevice) {
-    #if USE_CPU_FUSER
-      return cpufuser::getFusionHandle(fusion_group);
-    #endif
-    throw std::runtime_error("CPU fusion is not supported on this build.");
-  }
+// std::shared_ptr<FusionHandle> getFusionHandle(Node* fusion_group) {
+//   const auto device = fusion_group->i(attr::device);
+//   if (device == kCPUDevice) {
+//     #if USE_CPU_FUSER
+//       return cpufuser::getFusionHandle(fusion_group);
+//     #endif
+//     throw std::runtime_error("CPU fusion is not supported on this build.");
+//   }
 
-  #if USE_CUDA_FUSER
-    return cudafuser::getFusionHandle(fusion_group);
-  #endif // USE_CUDA_FUSER
+//   #if USE_CUDA_FUSER
+//     return cudafuser::getFusionHandle(fusion_group);
+//   #endif // USE_CUDA_FUSER
 
-  throw std::runtime_error("CUDA fusion is not supported on this build.");
-}
+//   throw std::runtime_error("CUDA fusion is not supported on this build.");
+// }
 
 bool canFuseOnCPU() {
   #if USE_CPU_FUSER
     return detail::cpu_fuser_enabled;
+  #else // !USE_CPU_FUSER
+    return false;
   #endif // USE_CPU_FUSER
-
-  return false;
 }
 
 bool canFuseOnGPU() {
   #if USE_CUDA_FUSER
     return true;
-  #endif  // USE_CUDA_FUSER
-
-  return false;
+  #else // !USE_CUDA_FUSER
+    return false;
+  #endif // USE_CUDA_FUSER
 }
 
 void overrideCanFuseOnCPU(bool value) {
