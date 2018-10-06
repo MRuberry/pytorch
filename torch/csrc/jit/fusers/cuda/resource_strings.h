@@ -4,7 +4,7 @@
 
 #include "torch/csrc/jit/code_template.h"
 
-namespace torch { namespace jit { namespace cudafuser {
+namespace torch { namespace jit { namespace fusers { namespace cuda {
 
 /*with type_as not checking type of its input, a fusion group can have non-fp32 tensor as input.
 Correct code for this case is generated, however, nvrtc does not know how to handle int*_t integer types,
@@ -194,7 +194,8 @@ constexpr auto half_support_literal  = R"(
 typedef __half half;
 )";
 
-} // namespace cudafuser
+} // namespace cuda
+} // namespace fusers
 } // namespace jit 
 } // namespace torch
 

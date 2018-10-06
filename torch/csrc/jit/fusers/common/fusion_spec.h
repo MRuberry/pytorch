@@ -18,6 +18,8 @@ struct FusionSpec {
   FusionSpec(Node* node) {
     // Stores a canonicalized copy of the node's graph
     graph_ = node->g(attr::Subgraph)->copy();
+
+    // Note: currently "canonicalization" is just removing shape information
     EraseShapeInformation(*graph_);
     
     // Creates key
@@ -26,8 +28,8 @@ struct FusionSpec {
     std::string key_ = key.str();
   }
 
-  std::shared_ptr<Graph> graph() { return graph_; }
-  std::string& key() { return key_; }
+  const std::shared_ptr<Graph> graph() { return graph_; }
+  const std::string& key() { return key_; }
 
 private:
   std::shared_ptr<Graph> graph_;

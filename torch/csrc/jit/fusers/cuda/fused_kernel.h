@@ -1,6 +1,7 @@
+#pragma once
 #include "torch/csrc/jit/fusers/config.h"
 #if USE_CUDA_FUSER
-#pragma once
+
 
 #include "torch/csrc/jit/fusers/common/fused_kernel.h"
 #include "torch/csrc/jit/fusers/common/annotated_graph.h"
@@ -15,9 +16,9 @@
 #include <vector>
 #include <string>
 
-namespace torch { namespace jit { namespace cudafuser {
+namespace torch { namespace jit { namespace fusers { namespace cuda {
 
-struct CUDAFusedKernel : public ::torch::jit::FusedKernel {
+struct CUDAFusedKernel : public ::torch::jit::fusers::FusedKernel {
   CUDAFusedKernel(const std::string& name, AnnotatedGraph& agraph);
 
   virtual ~CUDAFusedKernel() override {
@@ -52,7 +53,8 @@ protected:
   int maxBlocks;
 };
 
-} // namespace cudafuser
+} // namespace cpu
+} // namespace fusers
 } // namespace jit 
 } // namespace torch
 

@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <vector>
+#include <string>
 
 namespace torch { namespace jit {
 
@@ -22,10 +23,10 @@ struct TORCH_API FusionHandle {
 };
 
 // Returns true if the fusion_group was unregistered, false otherwise.
-TORCH_API bool registerFusion(Node* fusion_group);
+TORCH_API const std::string& registerFusion(Node* fusion_group);
 
 // Returns true if the fusion was run, false if a fallback was run.
-TORCH_API bool runFusion(Node* fusion_group, Stack& stack);
+TORCH_API bool runFusion(const std::string& key, Stack& stack);
 
 TORCH_API bool canFuseOnCPU();
 TORCH_API bool canFuseOnGPU();

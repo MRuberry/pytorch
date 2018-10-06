@@ -1,14 +1,13 @@
+#pragma once
 #include "torch/csrc/jit/fusers/config.h"
 #if USE_CPU_FUSER || USE_CUDA_FUSER
-#pragma once
-
-#include "torch/csrc/jit/fusers/interface.h"
-#include "torch/csrc/jit/fusers/common/fusion_arg_spec.h"
-#include "torch/csrc/jit/fusers/common/fused_kernel.h"
 
 #include "torch/csrc/jit/stack.h"
 #include "torch/csrc/jit/interpreter.h"
 #include "torch/csrc/jit/ir.h"
+#include "torch/csrc/jit/fusers/interface.h"
+#include "torch/csrc/jit/fusers/common/fusion_arg_spec.h"
+#include "torch/csrc/jit/fusers/common/fused_kernel.h"
 
 #include "ATen/ATen.h"
 
@@ -17,7 +16,7 @@
 #include <vector>
 #include <unordered_map>
 
-namespace torch { namespace jit {
+namespace torch { namespace jit { namespace fusers {
 
 // FusionCompiler has very limited shape information available at the time getOrCompile
 // is called, and this is why it can't really prepare the kernels at that time. Instead,
@@ -66,6 +65,7 @@ private:
   , torch::hash<FusionArgSpec>> kernels;
 };
 
+} // namespace fusers
 } // namespace jit 
 } // namespace torch
 

@@ -3,7 +3,6 @@
 #if USE_CPU_FUSER || USE_CUDA_FUSER
 
 #include "torch/csrc/utils/disallow_copy.h"
-
 #include "torch/csrc/jit/ir.h"
 #include "torch/csrc/jit/fusers/common/fusion_spec.h"
 
@@ -21,9 +20,10 @@ struct Cache {
   Cache() = default;
   ~Cache() = default;
 
-  // Ensures the given fusion spec is stored in the cache.
-  // Returns true if spec was stored, false otherwise.
-  bool storeOnce(std::shared_ptr<FusionSpec> spec);
+  // Ensures the given node or fusion spec is stored in the cache.
+  // Returns the key of the (resulting) FusionSpec
+  const std::string& storeOnce(std::shared_ptr<FusionSpec> spec);
+  const std::string& storeOnce(Node* fusion_group);
 
   at::optional<std::shared_ptr<FusionSpec>> get(const std::string& key);
 

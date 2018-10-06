@@ -118,6 +118,7 @@ namespace torch { namespace jit {
   _(attr, transA)                  \
   _(attr, transB)                  \
   _(attr, name)                    \
+  _(attr, fusion_key)              \
   _(attr, a)                       \
   _(attr, b)
 #else

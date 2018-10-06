@@ -1,6 +1,7 @@
 #include "torch/csrc/jit/fusers/interface.h"
 
 #include "torch/csrc/jit/fusers/config.h"
+#include "torch/csrc/jit/fusers/common/cache.h"
 
 #if USE_CPU_FUSER
   #include "torch/csrc/jit/fusers/cpu/interface.h"
@@ -21,12 +22,20 @@ bool cpu_fuser_enabled = false;
 } // namespace detail
 
 // Returns true if the fusion_group was unregistered, false otherwise.
-bool registerFusion(Node* fusion_group) {
-  return false;
+const std::string& registerFusion(Node* fusion_group) {
+  if (fusion_group->hasAttribute(attr::fusion_key)) {
+    return fusion_group->s(attr::fusion_key);
+  }
+
+  // Stores the fusion group, stuffs and returns the key
+  auto& cache = fusers::getCache();
+  auto& key = cache.storeOnce(fusion_group);
+  fusion_group->s_(attr::fusion_key, key);
+  return key;
 }
 
 // Returns true if the fusion was run, false if a fallback was run.
-bool runFusion(Node* fusion_group, Stack& stack) {
+bool runFusion(const std::string& key, Stack& stack) {
   return false;
 }
 
@@ -75,13 +84,13 @@ std::vector<at::Tensor> debugLaunchGraph(
 , at::ArrayRef<at::Tensor> inputs) {
   if (device == kCPUDevice) {
     #if USE_CPU_FUSER
-      return cpufuser::debugLaunchGraph(graph, device, inputs);
+      return fusers::cpu::debugLaunchGraph(graph, inputs);
     #endif // USE_CPU_FUSER
     throw std::runtime_error("CPU fusion is not supported on this build.");
   }
 
   #if USE_CUDA_FUSER
-    return cudafuser::debugLaunchGraph(graph, device, inputs);
+    return fusers::cuda::debugLaunchGraph(graph, device, inputs);
   #endif // USE_CUDA_FUSER
 
   throw std::runtime_error("CUDA fusion is not supported on this build.");

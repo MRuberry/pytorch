@@ -194,7 +194,7 @@ if (NOT WIN32)
     ${TORCH_SRC_DIR}/csrc/jit/fusers/common/tensor_desc.cpp
     ${TORCH_SRC_DIR}/csrc/jit/fusers/common/fusion_handle_impl.cpp
     ${TORCH_SRC_DIR}/csrc/jit/fusers/common/fused_kernel.cpp
-    ${TORCH_SRC_DIR}/csrc/jit/fusers/cpu/fusion_compiler.cpp
+    ${TORCH_SRC_DIR}/csrc/jit/fusers/cpu/interface.cpp
     ${TORCH_SRC_DIR}/csrc/jit/fusers/cpu/fused_kernel.cpp
   )
 endif()
