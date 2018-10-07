@@ -6,6 +6,7 @@
 #include "torch/csrc/jit/assertions.h"
 #include "torch/csrc/jit/passes/shape_analysis.h" // EraseShapeInformation
 #include "torch/csrc/jit/fusers/interface.h"
+#include "torch/csrc/jit/fusers/common/cache.h"
 #include "torch/csrc/jit/fusers/common/fusion_handle_impl.h"
 
 #include <cstdlib>
@@ -63,6 +64,8 @@ CompilerConfig& getCompilerConfig() {
 // }
 
 bool runFusion(const std::string& key, Stack& stack) {
+  std::cout << std::endl << "cpu/runFusion" << std::endl;
+
   return false;
 }
 

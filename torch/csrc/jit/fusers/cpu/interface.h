@@ -5,7 +5,6 @@
 #include "torch/csrc/jit/ir.h"
 #include "torch/csrc/jit/stack.h"
 #include "torch/csrc/jit/fusers/interface.h"
-#include "torch/csrc/jit/fusers/cpu/fusion_compiler.h"
 
 #include "ATen/ATen.h"
 

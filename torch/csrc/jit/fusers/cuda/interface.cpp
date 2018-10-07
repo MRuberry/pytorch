@@ -4,6 +4,7 @@
 #include "torch/csrc/jit/assertions.h"
 #include "torch/csrc/jit/ivalue.h" // IValue
 #include "torch/csrc/jit/fusers/interface.h"
+#include "torch/csrc/jit/fusers/common/cache.h"
 #include "torch/csrc/jit/fusers/common/fusion_spec.h"
 #include "torch/csrc/jit/fusers/common/fusion_handle_impl.h"
 
@@ -18,6 +19,19 @@ namespace torch { namespace jit { namespace fusers { namespace cuda {
 static std::unordered_map<std::string, std::shared_ptr<FusionHandleImpl>> cache_map;
 
 bool runFusion(const std::string& key, Stack& stack) {
+  // Acquires the FusionSpec from the global cache (by key)
+  auto& cache = getCache();
+  auto spec = cache.get(key);
+  if (!spec) {
+    std::cout << "No spec!";
+  }
+  std::cout << "Spec!";
+
+  // Acquires the Instantiation from the cpu cache or creates and caches it
+  // Sees if the instantation can run with the given inputs
+  // If not, run fallback
+  // Otherwise, runs the instantiation with the given inputs
+
   return false;
 } 
 

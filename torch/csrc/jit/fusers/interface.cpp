@@ -17,7 +17,7 @@ namespace torch { namespace jit {
 
 namespace detail {
 
-bool cpu_fuser_enabled = false;
+bool cpu_fuser_enabled = true; // TODO: disable (only enabled for testing)
 
 } // namespace detail
 
@@ -36,6 +36,21 @@ const std::string& registerFusion(Node* fusion_group) {
 
 // Returns true if the fusion was run, false if a fallback was run.
 bool runFusion(const std::string& key, Stack& stack) {
+  std::cout << std::endl << "fusers/runFusion" << std::endl;
+  // Acquires the FusionSpec from the global cache (by key)
+  auto& cache = fusers::getCache();
+  auto spec = cache.get(key);
+  if (!spec) {
+    // TODO: assert
+    std::cout << std::endl << "No spec!" << std::endl;
+    return false;
+  }
+
+  // Selects an appropriate device fuser
+  // Asks the fuser if they can run the spec with the given inputs
+  // If not, runs the fallback
+  // Otherwise, requests the fuser run the spec with the inputs
+
   return false;
 }
 

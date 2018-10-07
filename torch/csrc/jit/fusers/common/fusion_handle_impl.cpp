@@ -9,7 +9,7 @@
 #include "torch/csrc/jit/fusers/common/annotated_graph.h"
 #include "torch/csrc/jit/fusers/common/tensor_desc.h"
 #include "torch/csrc/jit/fusers/cpu/fused_kernel.h"
-#include "torch/csrc/jit/fusers/cpu/fusion_compiler.h"
+#include "torch/csrc/jit/fusers/cpu/interface.h"
 #include "torch/csrc/jit/fusers/cuda/fused_kernel.h"
 
 #include "ATen/ATen.h"
