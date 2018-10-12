@@ -1,16 +1,19 @@
 #include "torch/csrc/jit/fusers/compiler.h"
 
+#include "torch/csrc/jit/passes/shape_analysis.h"
+
+#include <iostream>
+
 namespace torch { namespace jit { namespace fusers {
 
 std::string registerFusion(Node* fusion_group) {
-  // Generates fusion key
   auto graph = fusion_group->g(attr::Subgraph)->copy();
 
-  // EraseShapeInformation(*graph);
-  // std::stringstream key;
-  // key << "device " << device << "\n";
-  // key << *graph << "\n";
-  // std::string key_ = key.str();
+  // Generates fusion key
+  EraseShapeInformation(*graph);
+  std::stringstream ss;
+  ss << *graph;
+  const auto key_ = ss.str();
 
   // auto it = cache_map.find(key_);
   // if (it == cache_map.end()) {
