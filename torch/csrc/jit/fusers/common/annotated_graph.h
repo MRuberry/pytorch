@@ -1,13 +1,12 @@
-#include "torch/csrc/jit/fusers/Config.h"
-#if USE_CPU_FUSER || USE_CUDA_FUSER
 #pragma once
+#include "torch/csrc/jit/fusers/config.h"
+#if USE_CPU_FUSER || USE_CUDA_FUSER
 
+#include "torch/csrc/jit/ir.h"
 #include "torch/csrc/jit/fusers/interface.h"
 #include "torch/csrc/jit/fusers/common/tensor_desc.h"
 
-#include "torch/csrc/jit/ir.h"
-
-namespace torch { namespace jit {
+namespace torch { namespace jit { namespace fusers {
 
 struct AnnotatedGraph {
   // short-term storage only, so it borrows Graph.
@@ -20,6 +19,7 @@ struct AnnotatedGraph {
   std::vector<TensorDesc> output_desc;
 };
 
+} // namespace fusers
 } // namespace jit 
 } // namespace torch
 

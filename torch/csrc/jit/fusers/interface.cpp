@@ -1,6 +1,6 @@
 #include "torch/csrc/jit/fusers/interface.h"
 
-#include "torch/csrc/jit/fusers/Config.h"
+#include "torch/csrc/jit/fusers/config.h"
 
 #if USE_CPU_FUSER
   #include "torch/csrc/jit/fusers/cpu/interface.h"
@@ -27,13 +27,13 @@ std::shared_ptr<FusionHandle> getFusionHandle(Node* fusion_group) {
   const auto device = fusion_group->i(attr::device);
   if (device == kCPUDevice) {
     #if USE_CPU_FUSER
-      return cpufuser::getFusionHandle(fusion_group);
+      return fusers::cpu::getFusionHandle(fusion_group);
     #endif
     throw std::runtime_error("CPU fusion is not supported on this build.");
   }
 
   #if USE_CUDA_FUSER
-    return cudafuser::getFusionHandle(fusion_group);
+    return fusers::cuda::getFusionHandle(fusion_group);
   #endif // USE_CUDA_FUSER
 
   throw std::runtime_error("CUDA fusion is not supported on this build.");
@@ -65,13 +65,13 @@ std::vector<at::Tensor> debugLaunchGraph(
 , at::ArrayRef<at::Tensor> inputs) {
   if (device == kCPUDevice) {
     #if USE_CPU_FUSER
-      return cpufuser::debugLaunchGraph(graph, device, inputs);
+      return fusers::cpu::debugLaunchGraph(graph, device, inputs);
     #endif // USE_CPU_FUSER
     throw std::runtime_error("CPU fusion is not supported on this build.");
   }
 
   #if USE_CUDA_FUSER
-    return cudafuser::debugLaunchGraph(graph, device, inputs);
+    return fusers::cuda::debugLaunchGraph(graph, device, inputs);
   #endif // USE_CUDA_FUSER
 
   throw std::runtime_error("CUDA fusion is not supported on this build.");

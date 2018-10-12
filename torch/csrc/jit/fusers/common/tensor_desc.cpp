@@ -2,7 +2,7 @@
 
 #include "torch/csrc/jit/assertions.h"
 
-namespace torch { namespace jit {
+namespace torch { namespace jit { namespace fusers {
 
 std::vector<bool> TensorDesc::findContiguous(
   const at::IntList& sizes
@@ -16,5 +16,6 @@ std::vector<bool> TensorDesc::findContiguous(
   return cont;
 }
 
+} // namespace fusers
 } // namespace jit 
 } // namespace torch

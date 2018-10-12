@@ -212,8 +212,8 @@ if (USE_CUDA AND NOT USE_ROCM AND NOT WIN32)
 endif()
 
 CONFIGURE_FILE(
-    ${TORCH_SRC_DIR}/csrc/jit/fusers/Config.h.in
-    ${CMAKE_CURRENT_SOURCE_DIR}/csrc/jit/fusers/Config.h)
+    ${TORCH_SRC_DIR}/csrc/jit/fusers/config.h.in
+    ${CMAKE_CURRENT_SOURCE_DIR}/csrc/jit/fusers/config.h)
 
 if (NOT NO_API AND NOT USE_ROCM)
   list(APPEND TORCH_SRCS

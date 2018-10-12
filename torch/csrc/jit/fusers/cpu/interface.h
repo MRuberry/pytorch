@@ -1,18 +1,16 @@
-#include "torch/csrc/jit/fusers/Config.h"
-#if USE_CPU_FUSER
 #pragma once
-
-#include "torch/csrc/jit/fusers/interface.h"
-#include "torch/csrc/jit/fusers/cpu/fusion_compiler.h"
+#include "torch/csrc/jit/fusers/config.h"
+#if USE_CPU_FUSER
 
 #include "ATen/ATen.h"
-
 #include "torch/csrc/jit/ir.h"
+#include "torch/csrc/jit/fusers/interface.h"
+#include "torch/csrc/jit/fusers/cpu/fusion_compiler.h"
 
 #include <vector>
 #include <memory>
 
-namespace torch { namespace jit { namespace cpufuser {
+namespace torch { namespace jit { namespace fusers { namespace cpu {
 
 inline std::shared_ptr<FusionHandle> getFusionHandle(Node* fusion_group) {
   return getFusionCompiler().getFusionHandle(fusion_group);
@@ -25,7 +23,8 @@ std::vector<at::Tensor> debugLaunchGraph(
   return getFusionCompiler().debugLaunchGraph(graph, device, inputs);
 }
 
-} // namespace cpufuser
+} // namespace cpu
+} // namespace fusers
 } // namespace jit 
 } // namespace torch
 

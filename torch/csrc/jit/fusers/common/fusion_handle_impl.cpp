@@ -1,5 +1,11 @@
 #include "torch/csrc/jit/fusers/common/fusion_handle_impl.h"
 
+#include "ATen/ATen.h"
+#include "ATen/ExpandUtils.h"
+#include "torch/csrc/utils/functional.h" //fmap
+#include "torch/csrc/jit/interpreter.h"
+#include "torch/csrc/jit/ir.h"
+#include "torch/csrc/jit/custom_operator.h"
 #include "torch/csrc/jit/fusers/interface.h"
 #include "torch/csrc/jit/fusers/common/fusion_arg_spec.h"
 #include "torch/csrc/jit/fusers/common/annotated_graph.h"
@@ -8,21 +14,12 @@
 #include "torch/csrc/jit/fusers/cpu/fusion_compiler.h"
 #include "torch/csrc/jit/fusers/cuda/fused_kernel.h"
 
-#include "torch/csrc/jit/interpreter.h"
-#include "torch/csrc/jit/ir.h"
-#include "torch/csrc/jit/custom_operator.h"
-
-#include "torch/csrc/utils/functional.h" //fmap
-
-#include "ATen/ATen.h"
-#include "ATen/ExpandUtils.h"
-
 #include <unordered_set>
 #include <tuple>
 #include <algorithm>
 #include <exception>
 
-namespace torch { namespace jit {
+namespace torch { namespace jit { namespace fusers {
 
 ////////////////////////////////////////////////////////////////////////////////
 // FusedKernelCache
@@ -282,15 +279,15 @@ std::unique_ptr<FusedKernel> FusionHandleImpl::compileSpec(
   FusedKernel* raw_func;
   if (device != kCPUDevice) {
     #if USE_CUDA_FUSER
-      raw_func = new cudafuser::CUDAFusedKernel(name, agraph);
+      raw_func = new cuda::CUDAFusedKernel(name, agraph);
     #else
       throw std::runtime_error("CUDA Fusion is not supported on this build.");
     #endif // USE_CUDA_FUSER
   } else {
-    raw_func = new cpufuser::CPUFusedKernel(
+    raw_func = new cpu::CPUFusedKernel(
       name
     , agraph
-    , cpufuser::getFusionCompiler().getConfig());
+    , cpu::getFusionCompiler().getConfig());
   }
   return std::unique_ptr<FusedKernel>(raw_func);
 }
@@ -396,5 +393,6 @@ void FusionHandleImpl::runFallback(Stack& stack) {
   InterpreterState(fallback_code).run(stack);
 }
 
+} // namespace fusers
 } // namespace jit
 } // namespace torch
