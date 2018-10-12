@@ -1,14 +1,8 @@
 #include "torch/csrc/jit/fusers/interface.h"
 
 #include "torch/csrc/jit/fusers/config.h"
-
-#if USE_CPU_FUSER
-  #include "torch/csrc/jit/fusers/cpu/interface.h"
-#endif // USE_CPU_FUSER
-
-#if USE_CUDA_FUSER
-  #include "torch/csrc/jit/fusers/cuda/interface.h"
-#endif // USE_CUDA_FUSER
+#include "torch/csrc/jit/fusers/compiler.h"
+#include "torch/csrc/jit/fusers/fallback.h"
 
 #include <stdexcept>
 
@@ -20,23 +14,18 @@ bool cpu_fuser_enabled = false;
 
 } // namespace detail
 
-// Pure virtual destructor definition
-FusionHandle::~FusionHandle() { }
+std::string registerFusion(Node* fusion_group) {
+  return fusers::registerFusion(fusion_group);
+}
 
-std::shared_ptr<FusionHandle> getFusionHandle(Node* fusion_group) {
-  const auto device = fusion_group->i(attr::device);
-  if (device == kCPUDevice) {
-    #if USE_CPU_FUSER
-      return fusers::cpu::getFusionHandle(fusion_group);
-    #endif
-    throw std::runtime_error("CPU fusion is not supported on this build.");
-  }
+bool runFusion(
+  const std::string& fusion_key
+, Stack& stack) {
+  return fusers::runFusion(fusion_key, stack);
+}
 
-  #if USE_CUDA_FUSER
-    return fusers::cuda::getFusionHandle(fusion_group);
-  #endif // USE_CUDA_FUSER
-
-  throw std::runtime_error("CUDA fusion is not supported on this build.");
+void runFallback(Node* fusion_group, Stack& stack) {
+  fusers::runFallback(fusion_group, stack);
 }
 
 bool canFuseOnCPU() {
@@ -63,18 +52,18 @@ std::vector<at::Tensor> debugLaunchGraph(
   Graph& graph
 , int device
 , at::ArrayRef<at::Tensor> inputs) {
-  if (device == kCPUDevice) {
-    #if USE_CPU_FUSER
-      return fusers::cpu::debugLaunchGraph(graph, device, inputs);
-    #endif // USE_CPU_FUSER
-    throw std::runtime_error("CPU fusion is not supported on this build.");
-  }
+  // if (device == kCPUDevice) {
+  //   #if USE_CPU_FUSER
+  //     return fusers::cpu::debugLaunchGraph(graph, device, inputs);
+  //   #endif // USE_CPU_FUSER
+  //   throw std::runtime_error("CPU fusion is not supported on this build.");
+  // }
 
-  #if USE_CUDA_FUSER
-    return fusers::cuda::debugLaunchGraph(graph, device, inputs);
-  #endif // USE_CUDA_FUSER
-
-  throw std::runtime_error("CUDA fusion is not supported on this build.");
+  // #if USE_CUDA_FUSER
+  //   return fusers::cuda::debugLaunchGraph(graph, device, inputs);
+  // #endif // USE_CUDA_FUSER
+  return {};
+  // throw std::runtime_error("CUDA fusion is not supported on this build.");
 }
 
 } // namespace jit
