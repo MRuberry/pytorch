@@ -10,22 +10,22 @@ namespace torch { namespace jit {
 
 namespace detail {
 
-bool cpu_fuser_enabled = false;
+bool cpu_fuser_enabled = true; // TODO: reset to false, true for debug only!
 
 } // namespace detail
 
-std::string registerFusion(Node* fusion_group) {
+int64_t registerFusion(Node* fusion_group) {
   return fusers::registerFusion(fusion_group);
 }
 
 bool runFusion(
-  const std::string& fusion_key
+  const int64_t key
 , Stack& stack) {
-  return fusers::runFusion(fusion_key, stack);
+  return fusers::runFusion(key, stack);
 }
 
-void runFallback(Node* fusion_group, Stack& stack) {
-  fusers::runFallback(fusion_group, stack);
+void runFallback(const int64_t key, Stack& stack) {
+  fusers::runFallback(key, stack);
 }
 
 bool canFuseOnCPU() {

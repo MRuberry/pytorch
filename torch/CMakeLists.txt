@@ -174,6 +174,7 @@ set(TORCH_SRCS
   ${TORCH_SRC_DIR}/csrc/jit/fusers/interface.cpp
   ${TORCH_SRC_DIR}/csrc/jit/fusers/compiler.cpp
   ${TORCH_SRC_DIR}/csrc/jit/fusers/fallback.cpp
+  ${TORCH_SRC_DIR}/csrc/jit/fusers/cache.cpp
   ${TORCH_SRC_DIR}/csrc/jit/passes/pretty_print.cpp
   ${TORCH_SRC_DIR}/csrc/jit/register_prim_ops.cpp
   ${TORCH_SRC_DIR}/csrc/jit/register_special_ops.cpp
@@ -195,7 +196,6 @@ if (NOT WIN32)
 
   list(APPEND TORCH_SRCS
     ${TORCH_SRC_DIR}/csrc/jit/fusers/common/tensor_desc.cpp
-    ${TORCH_SRC_DIR}/csrc/jit/fusers/common/fusion_handle_impl.cpp
     ${TORCH_SRC_DIR}/csrc/jit/fusers/common/fused_kernel.cpp
     ${TORCH_SRC_DIR}/csrc/jit/fusers/cpu/fusion_compiler.cpp
     ${TORCH_SRC_DIR}/csrc/jit/fusers/cpu/fused_kernel.cpp

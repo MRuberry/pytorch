@@ -1,11 +1,12 @@
 #pragma once
 
-#include "torch/csrc/jit/ir.h"
 #include "torch/csrc/jit/stack.h"
+
+#include <cstdlib>
 
 namespace torch { namespace jit { namespace fusers {
 
-void runFallback(Node* fusion_group, Stack& stack);
+void runFallback(int64_t key, Stack& stack);
 
 } // namespace fusers
 } // namespace jit

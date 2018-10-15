@@ -24,6 +24,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <cstdint>
 
 namespace torch {
 namespace jit {
@@ -64,14 +65,14 @@ RegisterOperators reg({
         [](Node* node) {
           // Acquires FusionKey or registers fusion and stores key
           if (!node->hasAttribute(attr::FusionKey)) {
-            node->s_(attr::FusionKey, registerFusion(node));
+            node->i_(attr::FusionKey, registerFusion(node));
           }
-          const auto key = node->s(attr::FusionKey);
+          const auto key = node->i(attr::FusionKey);
  
           return [node, key](Stack& stack) {
             autograd::profiler::RecordFunction record("FusionGroup");
             const auto result = runFusion(key, stack);
-            if (!result) runFallback(node, stack);
+            if (!result) runFallback(key, stack);
             return 0;
           };
         }),
