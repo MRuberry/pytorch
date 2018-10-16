@@ -376,14 +376,19 @@ public:
     JIT_ASSERT(inputs_.size() == 1);
     return inputs_.at(0);
   }
+  const Value * input() const {
+    JIT_ASSERT(inputs_.size() == 1);
+    return inputs_.at(0);
+  }
   Value * output() {
     JIT_ASSERT(outputs_.size() == 1);
     return outputs_.at(0);
   }
-  const  Value * input() const {
-    JIT_ASSERT(inputs_.size() == 1);
-    return inputs_.at(0);
+  const Value * output() const {
+    JIT_ASSERT(outputs_.size() == 1);
+    return outputs_.at(0);
   }
+  
   // Access a particular input.  This is a checked index.
   Value * input(size_t i) const {
     return inputs_.at(i);

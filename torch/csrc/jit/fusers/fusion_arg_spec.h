@@ -5,7 +5,7 @@
 #include "ATen/ATen.h"
 #include "torch/csrc/utils/functional.h" // fmap
 #include "torch/csrc/utils/hash.h"
-#include "torch/csrc/jit/fusers/common/tensor_desc.h"
+#include "torch/csrc/jit/fusers/tensor_desc.h"
 
 #include <vector>
 #include <cstdint>

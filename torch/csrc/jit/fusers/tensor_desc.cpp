@@ -1,6 +1,8 @@
-#include "torch/csrc/jit/fusers/common/tensor_desc.h"
+#include "torch/csrc/jit/fusers/tensor_desc.h"
 
 #include "torch/csrc/jit/assertions.h"
+
+#include <cstdint>
 
 namespace torch { namespace jit { namespace fusers {
 

@@ -3,8 +3,11 @@
 #include "torch/csrc/jit/fusers/config.h"
 #include "torch/csrc/jit/fusers/compiler.h"
 #include "torch/csrc/jit/fusers/fallback.h"
+#include "torch/csrc/jit/fusers/executor.h"
+#include "torch/csrc/jit/fusers/return_code.h"
 
 #include <stdexcept>
+#include <iostream> // TODO: remove me
 
 namespace torch { namespace jit {
 
@@ -21,7 +24,14 @@ int64_t registerFusion(Node* fusion_group) {
 bool runFusion(
   const int64_t key
 , Stack& stack) {
-  return fusers::runFusion(key, stack);
+  const auto result = fusers::runFusion(key, stack);
+  if (result != fusers::ReturnCode::SUCCESS) {
+    // TODO: remove me
+    std::cout << result << std::endl;
+    return false;
+  }
+
+  return true;
 }
 
 void runFallback(const int64_t key, Stack& stack) {

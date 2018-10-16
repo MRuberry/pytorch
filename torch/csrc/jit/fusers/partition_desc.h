@@ -3,7 +3,7 @@
 #if USE_CPU_FUSER || USE_CUDA_FUSER
 
 #include "torch/csrc/jit/assertions.h"
-#include "torch/csrc/jit/fusers/common/tensor_desc.h"
+#include "torch/csrc/jit/fusers/tensor_desc.h"
 
 #include <memory>
 #include <cstdint>
@@ -16,12 +16,17 @@ namespace torch { namespace jit { namespace fusers {
 struct PartitionDesc {
   
   PartitionDesc()
-  : nSubtensors(1), dim(0) {}
+  : nSubTensors{1}
+  , dim{0} { }
 
-  PartitionDesc(const TensorDesc& desc, size_t nSubtensors, size_t dim)
-  : nSubtensors(nSubtensors), dim(dim) {
-    JIT_ASSERT(nSubtensors > 1);
-    std::vector<bool> cont = desc.contiguity;
+  PartitionDesc(
+    const TensorDesc& _desc
+  , size_t _nSubTensors
+  , size_t _dim)
+  : nSubTensors{_nSubTensors}
+  , dim{_dim} {
+    JIT_ASSERT(nSubTensors > 1);
+    std::vector<bool> cont = _desc.contiguity;
     if(dim > 0) {
       // when we narrow the concatenated output/chunked input
       // we make the size[dim] smaller while keeping the stride[dim] the same,
@@ -29,16 +34,16 @@ struct PartitionDesc {
       // so dim - 1 is no longer contiguous
       cont[dim - 1] = false;
     }
-    subtensorDesc.reset(new TensorDesc(desc.scalar_type, cont));
+    subTensorDesc.reset(new TensorDesc(_desc.scalar_type, cont));
   }
 
   bool isNoop() const {
-    return nSubtensors == 1;
+    return nSubTensors == 1;
   }
 
-  size_t nSubtensors; // == 1 for tensors that should not be operated on via chunk/cat
+  size_t nSubTensors; // == 1 for tensors that should not be operated on via chunk/cat
   size_t dim; // dimension along which the chunk/concat occurs
-  std::unique_ptr<TensorDesc> subtensorDesc; // descriptor for the subtensor, if it exists
+  std::unique_ptr<TensorDesc> subTensorDesc; // descriptor for the subtensor, if it exists
 };
 
 } // namespace fusers

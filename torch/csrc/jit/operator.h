@@ -50,12 +50,13 @@ struct TORCH_API Operator {
 
   bool matches(const Node* node) const;
 
-  Operation getOperation(Node* node = nullptr) const {
+  Operation getOperation(const Node* node = nullptr) const {
     if (op_) {
       return *op_;
     }
     AT_ASSERT(node != nullptr);
-    return op_creator_(node);
+    // TODO: const_cast shouldn't be required here
+    return op_creator_(const_cast<Node*>(node));
   }
 
   const FunctionSchema & schema() const {
@@ -83,7 +84,7 @@ TORCH_API const std::vector<std::shared_ptr<Operator>>& getAllOperatorsFor(Symbo
 std::shared_ptr<Operator> findOperatorFor(const Node* node);
 const Operator& getOperatorFor(const Node* node);
 
-inline Operation getOperation(Node* node) {
+inline Operation getOperation(const Node* node) {
   // note: getOperatorFor ensures that getOperatorFor(node).matches(node) == true
   // so the call to selectVariant is always valid.
   return getOperatorFor(node).getOperation(node);

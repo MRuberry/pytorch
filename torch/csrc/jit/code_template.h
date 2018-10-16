@@ -99,7 +99,7 @@ struct CodeTemplate {
   /* implicit */ CodeTemplate(const std::string & t)
   : template_text(t) {}
 
-  std::string format(const TemplateEnv & env) {
+  std::string format(const TemplateEnv & env) const {
     std::stringstream out;
     size_t pos = 0;
     size_t indent = 0;
@@ -142,12 +142,12 @@ struct CodeTemplate {
   }
 private:
   using string_list = std::vector<std::string>;
-  char charAt(size_t p) {
+  char charAt(size_t p) const {
     if (p >= template_text.size())
       throw std::logic_error("EOS found in key");
     return template_text[p];
   }
-  size_t parseKey(size_t pos, std::ostream & k, bool & comma_before, bool & comma_after) {
+  size_t parseKey(size_t pos, std::ostream & k, bool & comma_before, bool & comma_after) const {
     comma_before = false;
     comma_after = false;
     pos++;
@@ -170,7 +170,7 @@ private:
       return parseIdent(pos, k);
     }
   }
-  size_t parseIdent(size_t pos, std::ostream & k) {
+  size_t parseIdent(size_t pos, std::ostream & k) const {
     while(pos < template_text.size() &&
       (isalnum(template_text[pos]) || template_text[pos] == '_')) {
       k << template_text[pos];
@@ -178,7 +178,7 @@ private:
     }
     return pos;
   }
-  void emitCommaSeparatedList(std::ostream & out, const string_list & strings, bool comma_before, bool comma_after) {
+  void emitCommaSeparatedList(std::ostream & out, const string_list & strings, bool comma_before, bool comma_after) const {
     if(comma_before && strings.size() > 0)
       out << ", ";
     for(size_t i = 0; i < strings.size(); ++i) {
@@ -193,12 +193,12 @@ private:
   // leading or trailing newlines when the input string does not have leading
   // or trailing newlines. It's the responsibility of the calling function
   // to indent correctly in the context.
-  void emitIndent(std::ostream & out, size_t indent) {
+  void emitIndent(std::ostream & out, size_t indent) const {
     for(size_t i = 0; i < indent; ++i) {
       out << " ";
     }
   }
-  void emitStringWithIndents(std::ostream & out, size_t indent, const std::string & str) {
+  void emitStringWithIndents(std::ostream & out, size_t indent, const std::string & str) const {
     for(auto c : str) {
       out << c;
       if(c == '\n') {
@@ -206,7 +206,7 @@ private:
       }
     }
   }
-  void emitLinesIndented(std::stringstream & out, size_t indent, const string_list & strings) {
+  void emitLinesIndented(std::stringstream & out, size_t indent, const string_list & strings) const {
     for(size_t i = 0; i < strings.size(); ++i) {
       if(i > 0)
         emitIndent(out, indent);
@@ -215,8 +215,10 @@ private:
         out << "\n";
     }
   }
-  std::string template_text;
+  
+  const std::string template_text;
 };
+
 static inline std::string format(const std::string & fmt, TemplateEnv & env) {
   return CodeTemplate(fmt).format(env);
 }

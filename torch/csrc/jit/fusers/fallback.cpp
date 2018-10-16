@@ -7,6 +7,8 @@
 #include "torch/csrc/jit/custom_operator.h"
 #include "torch/csrc/jit/fusers/cache.h"
 
+#include <iostream> // TODO: remove me
+
 namespace torch { namespace jit { namespace fusers {
 
 // Registers fused operators so that fused graphs can properly generate fallback code.
@@ -29,6 +31,8 @@ RegisterOperators reg_fused_operators({
 });
 
 void runFallback(int64_t key, Stack& stack) {
+  // TODO: debugging only remove me
+  std::cout << "runFallback()" << std::endl;
   auto maybe_spec = retrieve(key);
 
   if (!maybe_spec) {

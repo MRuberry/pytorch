@@ -1,6 +1,6 @@
 #pragma once
 
-#include "aten/src/ATen/core/optional.h"
+#include "ATen/core/optional.h"
 #include "torch/csrc/jit/ir.h"
 #include "torch/csrc/jit/fusers/fusion_spec.h"
 

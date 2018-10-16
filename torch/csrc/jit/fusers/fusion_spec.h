@@ -7,8 +7,6 @@
 #include "torch/csrc/jit/interpreter.h"
 #include "torch/csrc/jit/ir.h"
 #include "torch/csrc/jit/fusers/interface.h"
-#include "torch/csrc/jit/fusers/common/fusion_arg_spec.h"
-#include "torch/csrc/jit/fusers/common/fused_kernel.h"
 
 #include <memory>
 #include <cstdint>
@@ -40,11 +38,13 @@ struct FusionSpec {
   : key_{_key}
   , graph_{_graph} 
   , code_{_graph}
+  , nInputs_{_graph->inputs().size()}
   { }
 
   int64_t key() const { return key_; }
   std::shared_ptr<Graph> graph() const { return graph_; }
   const Code& code() const { return code_; }
+  int64_t nInputs() const { return nInputs_; }
   
   // Getters and setters for inputBroadcastGroups_
   const std::vector<std::vector<int64_t>>& inputBroadcastGroups() const { return inputBroadcastGroups_; }
@@ -64,6 +64,7 @@ private:
   int64_t key_;
   std::shared_ptr<Graph> graph_;
   Code code_;
+  int64_t nInputs_;
   std::vector<std::vector<int64_t>> inputBroadcastGroups_;
   std::vector<PartitionInfo> inputChunkDescriptors_;
 };
