@@ -13,12 +13,13 @@
 
 namespace torch { namespace jit {
 
-constexpr int kUndefinedDevice = -2;
 constexpr int kCPUDevice = -1;
+
+TORCH_API bool isSupportedOp(const Node* node);
 
 // Creates a fusion plan for the given node, returning a std::string
 // to act as a key to signify that fusion.
-TORCH_API int64_t registerFusion(Node* fusion_group);
+TORCH_API int64_t registerFusion(const Node* fusion_group);
 
 // Runs the fusion assigned to the given fusion_key (see registerFusion()) 
 // using the inputs on the given Stack.

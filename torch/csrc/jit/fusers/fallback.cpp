@@ -7,7 +7,7 @@
 #include "torch/csrc/jit/custom_operator.h"
 #include "torch/csrc/jit/fusers/cache.h"
 
-#include <iostream> // TODO: remove me
+#include <stdexcept>
 
 namespace torch { namespace jit { namespace fusers {
 
@@ -31,12 +31,10 @@ RegisterOperators reg_fused_operators({
 });
 
 void runFallback(int64_t key, Stack& stack) {
-  // TODO: debugging only remove me
-  std::cout << "runFallback()" << std::endl;
   auto maybe_spec = retrieve(key);
 
   if (!maybe_spec) {
-    // TODO: error out
+    throw std::runtime_error("Failed to find fusion spec to run fallback.");
   }
 
   InterpreterState{(*maybe_spec).code()}.run(stack);

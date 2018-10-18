@@ -175,8 +175,9 @@ set(TORCH_SRCS
   ${TORCH_SRC_DIR}/csrc/jit/fusers/compiler.cpp
   ${TORCH_SRC_DIR}/csrc/jit/fusers/fallback.cpp
   ${TORCH_SRC_DIR}/csrc/jit/fusers/cache.cpp
-  ${TORCH_SRC_DIR}/csrc/jit/fusers/tensor_desc.cpp
   ${TORCH_SRC_DIR}/csrc/jit/fusers/executor.cpp
+  ${TORCH_SRC_DIR}/csrc/jit/fusers/type_and_shape_propagation.cpp
+  ${TORCH_SRC_DIR}/csrc/jit/fusers/simple_mappable.cpp
   ${TORCH_SRC_DIR}/csrc/jit/passes/pretty_print.cpp
   ${TORCH_SRC_DIR}/csrc/jit/register_prim_ops.cpp
   ${TORCH_SRC_DIR}/csrc/jit/register_special_ops.cpp

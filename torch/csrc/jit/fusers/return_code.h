@@ -9,6 +9,8 @@ enum ReturnCode {
   SUCCESS = 0
 , NOT_IMPL
 , FUSION_DISABLED
+, UNSUPPORTED_OP
+, NONFUSABLE_SPEC
 , NO_INPUTS
 , NON_FLOATING_INPUT
 , NO_OUTPUTS
@@ -19,6 +21,8 @@ const static std::vector<std::string> code_strings = {
   "SUCCESS"
 , "NOT_IMPL"
 , "FUSION_DISABLED"
+, "UNSUPPORTED_OP"
+, "NONFUSABLE_SPEC"
 , "NO_INPUTS"
 , "NON_FLOATING_INPUT"
 , "NO_OUTPUTS"

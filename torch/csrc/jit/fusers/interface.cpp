@@ -4,6 +4,7 @@
 #include "torch/csrc/jit/fusers/compiler.h"
 #include "torch/csrc/jit/fusers/fallback.h"
 #include "torch/csrc/jit/fusers/executor.h"
+#include "torch/csrc/jit/fusers/simple_mappable.h"
 #include "torch/csrc/jit/fusers/return_code.h"
 
 #include <stdexcept>
@@ -17,8 +18,19 @@ bool cpu_fuser_enabled = true; // TODO: reset to false, true for debug only!
 
 } // namespace detail
 
-int64_t registerFusion(Node* fusion_group) {
-  return fusers::registerFusion(fusion_group);
+bool isSupportedOp(const Node* node) {
+  return fusers::isSupportedOp(node);
+}
+
+int64_t registerFusion(const Node* fusion_group) {
+  int64_t key;
+  const auto result = fusers::registerFusion(key, fusion_group);
+  if (result != fusers::ReturnCode::SUCCESS) {
+    // TODO: remove me
+    std::cout << result << std::endl;
+  }
+
+  return key;
 }
 
 bool runFusion(
