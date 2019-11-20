@@ -4,10 +4,12 @@
 #include <torch/csrc/WindowsTorchApiMacro.h>
 #include <torch/csrc/jit/ir.h>
 #include <ATen/core/stack.h>
+#include <c10/core/DeviceType.h>
 
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include <unordered_map>
 
 #define FUSER_DEBUG 1
 
@@ -17,7 +19,16 @@ namespace jit {
 constexpr int kCPUDevice = -1;
 
 // Returns true if the node is added to the fusion group, false o.w.
-TORCH_API bool mergeNodeWithFusionGroup(const Node* const node, Node* fusion_group);
+TORCH_API bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key);
+
+TORCH_API std::unordered_map<int, c10::DeviceType> getFusionToDeviceMap();
+
+TORCH_API int getAndIncrementGlobalFusionCounter();
+
+TORCH_API void callFusion(const int key, Stack& stack);
+
+
+// OLD INTERFACE BELOW
 
 // Assigns a "key" to the given fusion_group that it can use to run its
 // fusion later (via runFusion() below).

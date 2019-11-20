@@ -9,6 +9,8 @@ namespace fuser {
 namespace cpu {
 
 // Returns true if the node is added to the fusion group, false o.w.
-TORCH_API bool mergeNodeWithFusionGroup(const Node* const node, Node* fusion_group);
+TORCH_API bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key);
+
+TORCH_API void callFusion(const int key, Stack& stack);
 
 }}}} // namespace torch::jit::fuser::cpu

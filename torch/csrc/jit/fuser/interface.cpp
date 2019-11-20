@@ -151,7 +151,7 @@ bool hasCompleteInputsAndOutputs(const Node* const node, const bool dbg = false)
 // Given a node and a fusion group, returns true if the node can be
 // merged into the fusion group and false if it cannot.
 // The fusion_group may be empty, specified by a nullptr.
-bool mergeNodeWithFusionGroup(const Node* const node, Node* fusion_group) {
+bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key) {
   #if FUSER_DEBUG
     std::cout << "interface.cpp: mergeNodeWithFusionGroup()" << std::endl;
     const auto is_complete = hasCompleteInputsAndOutputs(node, true);
@@ -206,17 +206,37 @@ bool mergeNodeWithFusionGroup(const Node* const node, Node* fusion_group) {
     #if FUSER_DEBUG
       std::cout << "Fusing on CPU" << std::endl;
     #endif // FUSER_DEBUG
-    return torch::jit::fuser::cpu::mergeNodeWithFusionGroup(node, fusion_group);
+    return torch::jit::fuser::cpu::mergeNodeWithFusionGroup(node, fusion_key);
   } else if (fusion_device.type() == c10::kCUDA) {
     #if FUSER_DEBUG
       std::cout << "Fusing on CUDA" << std::endl;
     #endif // FUSER_DEBUG
-    return torch::jit::fuser::cuda::mergeNodeWithFusionGroup(node, fusion_group);
+    return torch::jit::fuser::cuda::mergeNodeWithFusionGroup(node, fusion_key);
   } else {
     std::cout << "unknown fusion device: " << fusion_device << std::endl;
   }
 
   return false;
+}
+
+int fusion_counter = 0;
+std::unordered_map<int, c10::DeviceType> fusion_to_device_map;
+
+std::unordered_map<int, c10::DeviceType> getFusionToDeviceMap() {
+  return fusion_to_device_map;
+}
+
+int getAndIncrementGlobalFusionCounter() {
+  return fusion_counter++;
+}
+
+void callFusion(const int key, Stack& stack) {
+  const auto device_type = fusion_to_device_map[key];
+  std::cout << "Calling fusion on device " << device_type << std::endl;
+
+  if (device_type == c10::kCPU) {
+    torch::jit::fuser::cpu::callFusion(key, stack);
+  }
 }
 
 
