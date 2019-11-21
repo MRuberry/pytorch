@@ -315,7 +315,6 @@ struct GraphFuser {
   // DOES NOT WORK if n is a consumer of an output of the fusion group
   // returns the node _inside_ the group that represents the node
   Node* mergeNodeIntoGroup(Node* group, Node* n) {
-    AT_ASSERT(n->kind() != kind_);
     auto& subgraph = getSubgraph(group);
     // map from nodes in the surrounding graph to parameters in the fusion
     // group's subgraph that correspond to them
@@ -1085,15 +1084,15 @@ struct GraphFuser {
   }
 
   void optimizeFusedGraphs() {
-    for (Node* node : block_->nodes()) {
-      if (node->kind() != prim::FusionGroup) {
-        continue;
-      }
-      auto subgraph = node->g(attr::Subgraph);
-      EliminateDeadCode(subgraph);
-      EliminateCommonSubexpression(subgraph);
-      ConstantPooling(subgraph);
-    }
+    // for (Node* node : block_->nodes()) {
+    //   if (node->kind() != prim::FusionGroup) {
+    //     continue;
+    //   }
+    //   auto subgraph = node->g(attr::Subgraph);
+    //   EliminateDeadCode(subgraph);
+    //   EliminateCommonSubexpression(subgraph);
+    //   ConstantPooling(subgraph);
+    // }
   }
 
   void run() {
@@ -1206,20 +1205,88 @@ void PeepholeOptimizeShapeExpressions(Block* block) {
 
 } // anonymous namespace
 
-void FuseGraph(std::shared_ptr<Graph>& graph) {
-  std::cout << "graph_fuser.cpp: FuseGraph()" << std::endl;
+// Replaces n with a fusion group.
+// The fusion group takes the same inputs and produces the same outputs
+// as n.
+// The fusion group contains a subgraph with the same inputs and outputs
+// and the original node n.
+Node* createFusion(
+  const int fusion_key
+, std::shared_ptr<Graph>& graph
+, Node* n) {
+  // Creates and inserts fusion node (with its key)
+  auto fusion = graph->createWithSubgraph(prim::FusionGroup);
+  fusion->insertBefore(n);
+  fusion->i_(attr::value, fusion_key);
 
-  auto* block = graph->block();
-  for (auto it = block->nodes().rbegin(); it != block->nodes().rend(); ++it) {
-    auto* node = *it;
-    std::cout << "kind: " << node->kind().toQualString() << std::endl;
-    if (node->kind() == aten::add) {
-      std::cout << "Sending add node to fuser" << std::endl;
-      mergeNodeWithFusionGroup(node, nullptr);
-    }
+  // Grabs fusion node's subgraph (as a shorthand)
+  auto& subgraph = *(fusion->g(attr::Subgraph));
+
+  // Adds n's inputs to the fusion and its subgraph
+  for (auto input : n->inputs()) {
+    fusion->addInput(input);
+    subgraph.addInput()->setType(input->type());
   }
 
+  // Creates the fusion group's output
+  auto new_output = fusion->addOutput();
+  new_output->copyMetadata(n->output());
 
+  // Copies n to the subgraph and adds creates the subgraph output
+  {
+    WithInsertPoint guard(*subgraph.nodes().begin());
+    auto* copy = subgraph.create(n->kind(), subgraph.inputs(), n->outputs().size());
+    auto* out = subgraph.insertNode(copy)->output();
+    out->copyMetadata(n->output());
+    subgraph.registerOutput(out);
+  }
+
+  // Replaces n with the fusion and destroys n
+  n->replaceAllUsesWith(fusion);
+  n->destroy();
+
+  return fusion;
+}
+
+// TODO:
+// (1) formalize fusion plan w/querying
+// (2) need to rewrite so fusions are inplace operations (pre-allocate inputs)
+// (3) need to add functionalities to add to subgraphs correctly
+void FuseGraph(std::shared_ptr<Graph>& graph) {
+  std::cout << "graph_fuser.cpp: FuseGraph() (reverse iteration)" << std::endl;
+
+  std::cout << "pre-fusion graph: " << std::endl;
+  std::cout << *graph << std::endl << std::endl;
+
+  auto* block = graph->block();
+  auto it = block->nodes().rbegin();
+  while (it != block->nodes().rend()) {
+    auto* node = *it;
+    std::cout << "kind: " << node->kind().toQualString() << std::endl;
+
+    // Skips nonfusible nodes
+    // TODO: make set of nonfusible nodes to skip
+    if (node->kind() == prim::BailOut || node->kind() == prim::BailoutTemplate) {
+      ++it;
+      continue;
+    }
+
+    const auto fusion_key = tryCreateFusion(node);
+    if (fusion_key != -1) {
+        std::cout << "Successful fusion: " << fusion_key << std::endl;
+        auto* fusion = createFusion(fusion_key, graph, node);
+        // Resets reverse iterator (prior iterator invalidate by graph change)
+        it = fusion->reverseIterator();
+      }
+
+    ++it;
+  }
+
+  EliminateDeadCode(graph);
+
+  std::cout << std::endl;
+  std::cout << "post-fusion graph: " << std::endl;
+  std::cout << *graph << std::endl;
 
   // Does nothing: to be replaced!
 

@@ -18,8 +18,11 @@ namespace jit {
 
 constexpr int kCPUDevice = -1;
 
+// Returns -1 if the fusion wasn't created, returns a valid fusion key o.w.
+TORCH_API int tryCreateFusion(const Node* const node);
+
 // Returns true if the node is added to the fusion group, false o.w.
-TORCH_API bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key);
+TORCH_API bool tryMergeNodeWithFusion(const Node* const node, const int fusion_key);
 
 TORCH_API std::unordered_map<int, c10::DeviceType> getFusionToDeviceMap();
 

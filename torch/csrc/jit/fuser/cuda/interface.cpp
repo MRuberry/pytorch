@@ -30,7 +30,7 @@ std::vector<bool> canCollapseDimsDown(const std::shared_ptr<c10::TensorType> ten
 }
 
 // Returns true if the node is added to the fusion group, false o.w.
-bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key) {
+int tryCreateFusion(const Node* const node) {
   int64_t ndims = *(node->inputs()[0]->type()->expect<TensorType>()->dim());
   std::vector< std::vector<bool> > collapse_vecs;
 
@@ -83,10 +83,10 @@ bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key) {
 
   if(node->kind() ==  aten::add){
     std::cout<<"Can fuse node!"<<std::endl;
-    return true;
+    return -1;
   }
 
-  return false;
+  return -1;
 }
 
 }}}}

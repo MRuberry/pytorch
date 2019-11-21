@@ -147,11 +147,9 @@ bool hasCompleteInputsAndOutputs(const Node* const node, const bool dbg = false)
 
 } // namespace
 
-
-// Given a node and a fusion group, returns true if the node can be
-// merged into the fusion group and false if it cannot.
-// The fusion_group may be empty, specified by a nullptr.
-bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key) {
+// TODO: create a type for fusion keys
+// TODO: refactor validation
+int tryCreateFusion(const Node* const node) {
   #if FUSER_DEBUG
     std::cout << "interface.cpp: mergeNodeWithFusionGroup()" << std::endl;
     const auto is_complete = hasCompleteInputsAndOutputs(node, true);
@@ -161,7 +159,7 @@ bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key) {
   #endif // FUSER_DEBUG
 
   if (!is_complete) {
-    return false;
+    return -1;
   }
 
   // Validates that fusions:
@@ -172,13 +170,13 @@ bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key) {
   const auto& outputs = node->outputs();
 
   if (outputs.size() != 1) {
-    return false;
+    return -1;
   }
 
   const auto& output = node->output();
 
   if (!(output->isCompleteTensor())) {
-    return false;
+    return -1;
   }
 
   // Acquires fusion device
@@ -198,7 +196,7 @@ bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key) {
       #if FUSER_DEBUG
         std::cout << "Input device != fusion device: " << input_device << std::endl;
       #endif // FUSER_DEBUG
-      return false;
+      return -1;
     }
   }
 
@@ -206,16 +204,23 @@ bool mergeNodeWithFusionGroup(const Node* const node, int* fusion_key) {
     #if FUSER_DEBUG
       std::cout << "Fusing on CPU" << std::endl;
     #endif // FUSER_DEBUG
-    return torch::jit::fuser::cpu::mergeNodeWithFusionGroup(node, fusion_key);
+    return torch::jit::fuser::cpu::tryCreateFusion(node);
   } else if (fusion_device.type() == c10::kCUDA) {
     #if FUSER_DEBUG
       std::cout << "Fusing on CUDA" << std::endl;
     #endif // FUSER_DEBUG
-    return torch::jit::fuser::cuda::mergeNodeWithFusionGroup(node, fusion_key);
+    return torch::jit::fuser::cuda::tryCreateFusion(node);
   } else {
     std::cout << "unknown fusion device: " << fusion_device << std::endl;
   }
 
+  return -1;
+}
+
+// Given a node and the key representing the fusion group,
+// returns true if the node can be merged into the fusion group and false
+// if it cannot.
+bool tryMergeNodeWithFusion(const Node* const node, const int fusion_key) {
   return false;
 }
 
