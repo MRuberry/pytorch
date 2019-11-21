@@ -1275,7 +1275,7 @@ void FuseGraph(std::shared_ptr<Graph>& graph) {
     if (fusion_key != -1) {
         std::cout << "Successful fusion: " << fusion_key << std::endl;
         auto* fusion = createFusion(fusion_key, graph, node);
-        // Resets reverse iterator (prior iterator invalidate by graph change)
+        // Resets reverse iterator (prior iterator invalidated by graph change)
         it = fusion->reverseIterator();
       }
 
