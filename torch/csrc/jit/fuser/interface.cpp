@@ -1,6 +1,8 @@
 #include <aten/src/ATen/core/jit_type.h>
 #include <c10/core/DeviceType.h>
 
+#include <torch/csrc/jit/ir.h>
+
 #include <torch/csrc/jit/fuser/interface.h>
 #include <torch/csrc/jit/fuser/cpu/interface.h>
 #include <torch/csrc/jit/fuser/cuda/interface.h>
@@ -55,10 +57,11 @@ void printStrides(const c10::VaryingStrides& strides) {
   std::cout << "Strides=(";
   for (size_t i = 0; i < *(strides.size()); ++i) {
     std::cout << *(strides[i]);
-    if(i != *(strides.size())-1)
+    if (i != *(strides.size()) - 1) {
       std::cout << ", ";
-    else
+    } else {
       std::cout << ")";
+    }
   }
 }
 
@@ -66,10 +69,11 @@ void printSizes(const c10::VaryingShape& sizes) {
   std::cout << "Sizes=(";
   for (size_t i = 0; i < *(sizes.size()); ++i) {
     std::cout << *(sizes[i]);
-    if(i != *(sizes.size())-1)
+    if (i != *(sizes.size())-1) {
       std::cout << ", ";
-    else
+    } else {
       std::cout << ")";
+    }
   }
 }
 
@@ -151,7 +155,7 @@ bool hasCompleteInputsAndOutputs(const Node* const node, const bool dbg = false)
 // TODO: refactor validation
 int tryCreateFusion(const Node* const node) {
   #if FUSER_DEBUG
-    std::cout << "interface.cpp: mergeNodeWithFusionGroup()" << std::endl;
+    std::cout << "interface.cpp: tryCreateFusion()" << std::endl;
     const auto is_complete = hasCompleteInputsAndOutputs(node, true);
     std::cout << "is_complete: " << is_complete << std::endl;
   #else
@@ -215,6 +219,13 @@ int tryCreateFusion(const Node* const node) {
   }
 
   return -1;
+}
+
+void compileFusion(const Node* const fusion) {
+  const auto fusion_device_type = ::torch::jit::fuser::getFusionDeviceType(fusion);
+  if (fusion_device_type == c10::DeviceType::CPU) {
+    ::torch::jit::fuser::cpu::compileFusion(fusion);
+  }
 }
 
 // Given a node and the key representing the fusion group,

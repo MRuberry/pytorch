@@ -2,9 +2,13 @@
 #include <torch/csrc/jit/fuser/cpu/interface.h>
 #include <torch/csrc/jit/fuser/common/utils.h>
 
+#include <c10/util/Exception.h>
+
 #include <asmjit/asmjit.h>
+
 #include <iostream>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace torch {
 namespace jit {
@@ -14,6 +18,7 @@ namespace cpu {
 using namespace torch::jit::fuser;
 
 // Generated function (add) signature
+// TODO: don't compile-time generate signatures
 typedef void (*addFunc)(unsigned, float*, float*, float*);
 
 using namespace asmjit;
@@ -21,123 +26,88 @@ using namespace asmjit::x86;
 
 namespace {
   std::unordered_map<int, addFunc> fusion_map;
+  std::unordered_set<Symbol> fusibleNodes{
+    aten::add
+  };
+
+  // Returns true iff the node is fusible
+  // TODO: The set of fusible nodes is fixed at compile time, but
+  //  we're using a mutable data structure
+  bool isFusible(const Node* const node) {
+    // Checks that node kind is in fusibleNodes
+    const auto kind = node->kind();
+    auto it = fusibleNodes.find(kind);
+    if (it == fusibleNodes.end()) {
+      return false;
+    }
+
+    // Check the following:
+    //  - the node's output is a single contiguous tensor
+    //  - the inputs are either tensors with the same shape as the output or
+    //      scalars == 1.f
+    //  - the first two inputs are tensors and the third is a scalar
+    // TODO: relax these requirements (requires updating fusion logic)
+    const auto output = node->output()->type()->expect<TensorType>();
+    const auto inputs = node->inputs();
+
+    for (auto i = decltype(inputs.size()){0}; i < inputs.size(); ++i) {
+      const auto* input = inputs[i];
+      // If a (complete) tensor, checks that it's collapsible to 1 dim
+      if (input->isCompleteTensor()) {
+        const auto tensor_input = input->type()->expect<TensorType>();
+        TensorMeta meta = torch::jit::fuser::collapse(output, tensor_input);
+        torch::jit::fuser::printMeta(meta);
+        if (meta.rank() != 1) {
+          return false;
+        }
+      } else if (input->type()->isSubtypeOf(NumberType::get())) {
+        const auto scalar = getAsFloat(input);
+        if (scalar != 1.f) {
+          return false;
+        }
+      } else {
+        TORCH_CHECK(false, "Input has unknown type");
+      }
+    }
+
+    // Checks that first two inputs are tensors and third is scalar
+    const auto* lhs = inputs[0];
+    const auto* rhs = inputs[1];
+    const auto* c = inputs[3];
+    if (!lhs->isCompleteTensor()
+     || !rhs->isCompleteTensor()
+     || !c->type()->isSubtypeOf(NumberType::get())) {
+      return false;
+    }
+
+    return true;
+  }
 }
 
-
-
-// Returns true if the node is added to the fusion group, false o.w.
+// Returns the key of the new fusion or -1 if the node is not fusible
+// TODO: tracking via keys requires thread-safety
+// TODO: associate fusion metadata with key during construction to support
+//  fusion kinds
 int tryCreateFusion(const Node* const node) {
   #if FUSER_DEBUG
     std::cout << "cpuMergeNodeWithFusionGroup" << std::endl;
   #endif // FUSER_DEBUG
 
-  if (node->kind() != aten::add) {
+  if (!isFusible(node)) {
+    std::cout << "node is not fusible!" << std::endl;
     return -1;
   }
+  std::cout << "node is fusible!" << std::endl;
 
-  // Creates a new fusion group
-
-  // Validates inputs are fusible
-  const auto inputs = node->inputs();
-  const auto output = node->output();
-
-  const auto lhs = inputs[0]->type()->expect<TensorType>();
-  const auto rhs = inputs[1]->type()->expect<TensorType>();
-  const auto c = inputs[2]; // TODO: validate c = 1
-
-  const auto lhs_rank = getRank(lhs);
-  const auto rhs_rank = getRank(rhs);
-
-  if (lhs_rank != rhs_rank) {
-    std::cout << "Rank mismatch!" << std::endl;
-    return -1;
-  }
-
-  const auto lhs_logical_rank = getNumNonCollapsibleDims(lhs);
-  const auto rhs_logical_rank = getNumNonCollapsibleDims(rhs);
-
-  if (lhs_logical_rank != rhs_logical_rank) {
-    std::cout << "Dims mismatch!" << std::endl;
-    return -1;
-  }
-
-  if (lhs_logical_rank != 1) {
-    std::cout << "Tensor's logical rank != 1!" << std::endl;
-    return -1;
-  }
-
-  const auto lhs_innermost_stride = *(lhs->strides()[lhs_rank - 1]);
-  const auto rhs_innermost_stride = *(rhs->strides()[rhs_rank - 1]);
-
-  if (lhs_innermost_stride != 1 || rhs_innermost_stride != 1) {
-    std::cout << "Innermost stride is not 1!" << std::endl;
-    return -1;
-  }
-
-  const auto lhs_numel = getNumel(lhs);
-  const auto rhs_numel = getNumel(rhs);
-
-  if (lhs_numel != rhs_numel) {
-    std::cout << "numel mismatch!" << std::endl;
-    return -1;
-  }
-
-  // Creates fusion_group
-
-  // Creates runtime and assembler
-  JitRuntime rt;
-  CodeHolder code;
-  code.init(rt.codeInfo());
-  Assembler a(&code);
-
-  // Creates fusion (element-by-element contiguous add)
-  Label LoopInc = a.newLabel();
-  Label LoopBody = a.newLabel();
-  Label Exit = a.newLabel();
-
-  // Short-circuits on size == 0
-  a.test(edi, edi);
-  a.je(Exit);
-
-  // Stores # of loop iterations, sets loop counter to zero
-  a.lea(r8d, dword_ptr(rdi, - 1)); // r8 = size - 1
-  a.xor_(eax, eax); // clears eax
-  a.jmp(LoopBody); // do () { } while () loop form
-
-  // Loop incrementer
-  a.bind(LoopInc);
-  a.mov(rax, rdi); // offset = offset + 1
-
-  // Loop body
-  a.bind(LoopBody);
-  a.vmovss(xmm0, dword_ptr(rdx, rax, 2)); // xmm0 = lhs[offset]
-  a.vaddss(xmm0, xmm0, dword_ptr(rcx, rax, 2)); // xmm0 = xmm0 + rhs[offset]
-  a.lea(rdi, dword_ptr(rax, 1)); // size = offset + 1
-  a.vmovss(dword_ptr(rsi, rax, 2), xmm0); // out[offset] = xmm0
-
-  // Checks if loop is finished
-  a.cmp(rax, r8); // if offset == size - 1, terminate
-  a.jne(LoopInc);
-
-  // Exit
-  a.bind(Exit);
-  a.ret();
-
-  // Jits the code and stores in function
-  addFunc fn;
-  Error err = rt.add(&fn, &code);
-  if (err) {
-    std::cout << "Error while jitting!" << std::endl;
-  }
-
-  const auto key = ::torch::jit::getAndIncrementGlobalFusionCounter();
-
-  // Updates maps
-  fusion_map[key] = fn;
-  ::torch::jit::getFusionToDeviceMap()[key] = c10::kCPU;
-
-  return key;
+  // Returns the key corresponding to this fusion
+  return ::torch::jit::getAndIncrementGlobalFusionCounter();
 }
+
+void compileFusion(const Node* const fusion) {
+
+}
+
+
 
 void callFusion(const int key, Stack& stack) {
   // auto& fn = fusion_map[key];
@@ -163,10 +133,25 @@ void callFusion(const int key, Stack& stack) {
   // TODO: remove me
   // Need to manage lifetime of these objects better
   // Creates runtime and assembler
-    JitRuntime rt;
-    CodeHolder code;
-    code.init(rt.codeInfo());
-    Assembler a(&code);
+  JitRuntime rt;
+  CodeHolder code;
+  code.init(rt.codeInfo());
+  Assembler a(&code);
+
+
+  // CodeHolder proto_code;
+  // Compiler cc(&proto_code);
+  // const auto argCount = 3; // out, lhs, rhs
+  // FuncSignatureBuilder signature(CallConv::kIDHost);
+  // signature.setRetT<void>();
+  // for (auto i = decltype(argCount){0}, i < argCount; ++i) {
+  //   signature.addArgT<float*>();
+  // }
+  // auot* proto_fn = cc.addFunc(signature);
+  // cc.finalize();
+
+
+
 
     // Creates fusion (element-by-element contiguous add)
     Label LoopInc = a.newLabel();

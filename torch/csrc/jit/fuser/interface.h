@@ -21,6 +21,12 @@ constexpr int kCPUDevice = -1;
 // Returns -1 if the fusion wasn't created, returns a valid fusion key o.w.
 TORCH_API int tryCreateFusion(const Node* const node);
 
+// Compiles the specified fusion associated with given key
+TORCH_API void compileFusion(const Node* const fusion);
+
+// TODO: remove key, it can be acquired from the node
+TORCH_API void callFusion(const int key, Stack& stack);
+
 // Returns true if the node is added to the fusion group, false o.w.
 TORCH_API bool tryMergeNodeWithFusion(const Node* const node, const int fusion_key);
 
@@ -28,7 +34,7 @@ TORCH_API std::unordered_map<int, c10::DeviceType> getFusionToDeviceMap();
 
 TORCH_API int getAndIncrementGlobalFusionCounter();
 
-TORCH_API void callFusion(const int key, Stack& stack);
+
 
 
 // OLD INTERFACE BELOW
