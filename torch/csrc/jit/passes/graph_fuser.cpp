@@ -1205,12 +1205,11 @@ void PeepholeOptimizeShapeExpressions(Block* block) {
 
 } // anonymous namespace
 
-// Replaces n with a fusion group.
-// The fusion group takes the same inputs and produces the same outputs
-// as n.
-// The fusion group contains a subgraph with the same inputs and outputs
-// and the original node n.
-Node* createFusion(
+// Replaces given Node n with a fusion group.
+// Notes:
+//  - The fusion node has the same inputs and outputs.
+//  - The fusion node contains a subgraph consisting of the original node.
+Node* makeFusionNode(
   const int fusion_key
 , std::shared_ptr<Graph>& graph
 , Node* n) {
@@ -1248,58 +1247,84 @@ Node* createFusion(
   return fusion;
 }
 
-// TODO:
-// (1) formalize fusion plan w/querying
-// (2) need to rewrite so fusions are inplace operations (pre-allocate inputs)
-// (3) need to add functionalities to add to subgraphs correctly
-void FuseGraph(std::shared_ptr<Graph>& graph) {
-  std::cout << "graph_fuser.cpp: FuseGraph() (reverse iteration)" << std::endl;
+std::unordered_set<Symbol> neverFusibleNodes{
+  prim::BailOut
+, prim::BailoutTemplate
+};
 
-  std::cout << "pre-fusion graph: " << std::endl;
-  std::cout << *graph << std::endl << std::endl;
+bool FuseBlockHelper(std::shared_ptr<Graph>& graph, Block* block) {
+  bool has_changed = false;
 
-  auto* block = graph->block();
+  // Enumerates nodes in reverse topological order
   auto it = block->nodes().rbegin();
   while (it != block->nodes().rend()) {
     auto* node = *it;
-    std::cout << "kind: " << node->kind().toQualString() << std::endl;
 
     // Skips nonfusible nodes
-    // TODO: make set of nonfusible nodes to skip
-    if (node->kind() == prim::BailOut || node->kind() == prim::BailoutTemplate) {
+    const auto nf_it = neverFusibleNodes.find(node->kind());
+    if (nf_it != neverFusibleNodes.end()) {
       ++it;
       continue;
     }
 
-    const auto fusion_key = tryCreateFusion(node);
-    if (fusion_key != -1) {
-      auto* fusion = createFusion(fusion_key, graph, node);
-      compileFusion(fusion);
-      std::cout << "Successful fusion: " << fusion_key << std::endl;
+    // Skips nodes with (sub)blocks
+    if (node->blocks().size() > 0) {
+      ++it;
+      continue;
+    }
 
-      // Resets reverse iterator (prior iterator invalidated by graph change)
+    if (node->kind() == prim::FusionGroup) {
+      // TODO
+    } else if (isFusible(node)) {
+      const auto fusion_key = createFusion(node);
+      auto* fusion = makeFusionNode(fusion_key, graph, node);
       it = fusion->reverseIterator();
+      has_changed = true;
     }
 
     ++it;
   }
 
+  return has_changed;
+}
+
+void FuseBlock(std::shared_ptr<Graph>& graph, Block* block) {
+  while (FuseBlockHelper(graph, block));
+
+  // Signals fusions to compile and fuses (sub)blocks
+  for (auto* node : block->nodes()) {
+    if (node->kind() == prim::FusionGroup) {
+      compileFusion(node);
+    }
+
+    for (auto* block : node->blocks()) {
+      FuseBlock(graph, block);
+    }
+  }
+}
+
+// TODO: make fusions inplace operations (pre-allocate inputs)
+void FuseGraph(std::shared_ptr<Graph>& graph) {
+  #if FUSER_DEBUG
+    std::cout << "graph_fuser.cpp: FuseGraph() (reverse iteration)" << std::endl;
+    std::cout << "pre-fusion graph: " << std::endl;
+    std::cout << *graph << std::endl << std::endl;
+  #endif // FUSER_DEBUG
+
+  // Creates fusions
+  FuseBlock(graph, graph->block());
+
+  // Runs clean-up passes
+  EliminateCommonSubexpression(graph);
   EliminateDeadCode(graph);
-
-  std::cout << std::endl;
-  std::cout << "post-fusion graph: " << std::endl;
-  std::cout << *graph << std::endl;
-
-  // Does nothing: to be replaced!
-
-  // GraphFuser(graph->block(), graph).run();
-  // // After FuseGraph some common subexpressions may come back
-  // EliminateCommonSubexpression(graph);
-  // // We might have emitted a fair amount of useless shape propagating code, so
-  // // remove it
-  // EliminateDeadCode(graph);
-  // // Improve the quality of shape propagation code that was left
+  // TODO: review the following -- remove it?
   // PeepholeOptimizeShapeExpressions(graph->block());
+
+  #if FUSER_DEBUG
+    std::cout << std::endl;
+    std::cout << "post-fusion graph: " << std::endl;
+    std::cout << *graph << std::endl;
+  #endif // FUSER_DEBUG
 }
 
 void CustomFuseGraph(

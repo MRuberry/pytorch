@@ -11,33 +11,34 @@
 #include <vector>
 #include <unordered_map>
 
-#define FUSER_DEBUG 1
-
 namespace torch {
 namespace jit {
 
-constexpr int kCPUDevice = -1;
+/*
+ * NEW INTERFACE
+*/
 
-// Returns -1 if the fusion wasn't created, returns a valid fusion key o.w.
-TORCH_API int tryCreateFusion(const Node* const node);
+#define FUSER_DEBUG 1
+
+TORCH_API bool isFusible(const Node* const node);
+
+// Creates a fusion consisting of just the given node and returns the
+// corresponding key
+TORCH_API int createFusion(const Node* const node);
 
 // Compiles the specified fusion associated with given key
 TORCH_API void compileFusion(const Node* const fusion);
 
 // TODO: remove key, it can be acquired from the node
-TORCH_API void callFusion(const int key, Stack& stack);
-
-// Returns true if the node is added to the fusion group, false o.w.
-TORCH_API bool tryMergeNodeWithFusion(const Node* const node, const int fusion_key);
-
-TORCH_API std::unordered_map<int, c10::DeviceType> getFusionToDeviceMap();
-
-TORCH_API int getAndIncrementGlobalFusionCounter();
+TORCH_API void callFusion(const Node* const node, Stack& stack);
 
 
+/*
+ * OLD INTERFACE BELOW
+*/
 
 
-// OLD INTERFACE BELOW
+constexpr int kCPUDevice = -1;
 
 // Assigns a "key" to the given fusion_group that it can use to run its
 // fusion later (via runFusion() below).

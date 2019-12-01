@@ -1,25 +1,171 @@
+#include <ATen/ATen.h>
 #include <aten/src/ATen/core/jit_type.h>
+#include <ATen/core/stack.h>
 #include <c10/core/DeviceType.h>
+#include <c10/core/TensorOptions.h>
 
 #include <torch/csrc/jit/ir.h>
 
+// New fuser includes
 #include <torch/csrc/jit/fuser/interface.h>
 #include <torch/csrc/jit/fuser/cpu/interface.h>
 #include <torch/csrc/jit/fuser/cuda/interface.h>
 #include <torch/csrc/jit/fuser/common/utils.h>
 
-
+// Historic fuser includes
 #include <torch/csrc/jit/fuser/compiler.h>
 #include <torch/csrc/jit/fuser/executor.h>
 #include <torch/csrc/jit/fuser/fallback.h>
 #include <torch/csrc/jit/fuser/kernel_cache.h>
 
-#include <asmjit/asmjit.h>
-
-#include <stdexcept>
+#include <iterator>
 
 namespace torch {
 namespace jit {
+
+using namespace torch::jit::fuser;
+
+namespace {
+
+// TODO: ensure tensors are not sparse (for now)
+// TODO: ensure tensors are float tensors (for now)
+// Returns true iff:
+//  - There is at least one input and one output
+//  - All inputs are complete tensors or scalars
+//  - All outputs are complete tensors
+//  - All tensors are on the same device
+bool validateNode(const Node* const node) {
+  const auto inputs = node->inputs();
+  const auto outputs = node->outputs();
+
+  if (inputs.size() == 0 || outputs.size() == 0) {
+    return false;
+  }
+
+  const auto device = getFusionDevice(node);
+
+  auto lambda = [device](
+    const at::ArrayRef<const Value*> values
+  , const bool allow_scalars) {
+    for (const auto* const val : values) {
+      if (val->isCompleteTensor()) {
+        const auto cur_device = *(val->type()->expect<TensorType>()->device());
+        if (device != cur_device) {
+          return false;
+        }
+      } else if (!allow_scalars || !isScalar(val)) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  return (lambda(inputs, true) && lambda(outputs, false));
+}
+
+} // namespace
+
+// Returns true iff the node is fusible
+bool isFusible(const Node* const node) {
+  if (!validateNode(node)) {
+    return false;
+  }
+
+  const auto device_type = getFusionDeviceType(node);
+
+  switch (device_type) {
+    case c10::kCPU:
+      return cpu::isFusibleOnCPU(node);
+    case c10::kCUDA:
+      return false;
+    default:
+      return false;
+  }
+
+  TORCH_CHECK(false, "End of non-void function");
+}
+
+// Returns the key corresponding to the fusion
+int createFusion(const Node* const node) {
+  TORCH_CHECK(isFusible(node), "Asked to create an impossible fusion!");
+
+  const auto device_type = getFusionDeviceType(node);
+
+  switch (device_type) {
+    case c10::kCPU:
+      return -1;
+    case c10::kCUDA:
+      return -1;
+    default:
+      TORCH_CHECK(false, "Trying to fuse on device type that doesn't support fusion!");
+  }
+
+  TORCH_CHECK(false, "End of non-void function");
+}
+
+void compileFusion(const Node* const fusion) {
+  // const auto fusion_device_type = ::torch::jit::fuser::getFusionDeviceType(fusion);
+  // if (fusion_device_type == c10::DeviceType::CPU) {
+  //   ::torch::jit::fuser::cpu::compileFusion(fusion);
+  // }
+}
+
+// Acquires inputs, allocates outputs, and calls fusion
+// TODO: outputs should be preallocated in the graph (see fusion pass)
+void callFusion(const Node* const node, Stack& stack) {
+  // Acquires inputs
+  const Graph& graph = *node->g(attr::Subgraph);
+  const auto nInputs = graph.inputs().size();
+  auto inputs = last(stack, nInputs);
+  drop(stack, nInputs);
+
+  // Constructs output
+  std::vector<at::Tensor> outputs;
+  for (const auto* const output : graph.outputs()) {
+    auto type = output->type()->expect<TensorType>();
+
+    const auto device = *(type->device());
+    const auto scalar_type = *(type->scalarType());
+
+    auto options = at::TensorOptions()
+      .dtype(scalar_type)
+      .layout(at::kStrided)
+      .device(device)
+      .requires_grad(type->requires_grad());
+
+    const auto sizes = extractSizes(type);
+
+    //auto tensor = at::empty({10, 7, 3, 5}, options);
+    auto tensor = at::empty(sizes, options);
+    outputs.push_back(tensor);
+  }
+
+  // Adds outputs to stack
+  stack.insert(
+    stack.end()
+  , std::make_move_iterator(outputs.begin())
+  , std::make_move_iterator(outputs.end()));
+
+  // Calls fusion
+  const auto device = *(graph.outputs()[0]->type()->expect<TensorType>()->device());
+  switch(device.type()) {
+    case c10::kCPU:
+      // torch::jit::fuser::cpu::callFusion(key, stack);
+      return;
+    case c10::kCUDA:
+      return;
+    default:
+      TORCH_CHECK(false, "Acquired an unknown fusion device type!");
+  }
+}
+
+
+
+
+// OLD STUFF BELOW HERE
+
+
 
 namespace detail {
 
@@ -27,257 +173,6 @@ namespace detail {
 bool cpu_fuser_enabled = false;
 
 } // namespace detail
-
-// TODO: make dbgs take stream to print on
-namespace {
-
-void printScalar(const Value* const value) {
-  if (value->node()->kind() == prim::Constant) {
-    std::cout << "Const Scalar: ";
-  } else {
-    std::cout << "Scalar: ";
-  }
-
-  if (value->type() == FloatType::get()) {
-    std::cout << "float ";
-    const float val = value->node()->f(attr::value);
-    std::cout << val;
-  } else if (value->type() == IntType::get()) {
-    std::cout << "int ";
-    const int val = value->node()->i(attr::value);
-    std::cout << val;
-  } else {
-    std::cout << "unknown";
-  }
-  std::cout << std::endl;
-}
-
-// Note: innermost dimension is at nDims - 1 (when nDims > 0)
-void printStrides(const c10::VaryingStrides& strides) {
-  std::cout << "Strides=(";
-  for (size_t i = 0; i < *(strides.size()); ++i) {
-    std::cout << *(strides[i]);
-    if (i != *(strides.size()) - 1) {
-      std::cout << ", ";
-    } else {
-      std::cout << ")";
-    }
-  }
-}
-
-void printSizes(const c10::VaryingShape& sizes) {
-  std::cout << "Sizes=(";
-  for (size_t i = 0; i < *(sizes.size()); ++i) {
-    std::cout << *(sizes[i]);
-    if (i != *(sizes.size())-1) {
-      std::cout << ", ";
-    } else {
-      std::cout << ")";
-    }
-  }
-}
-
-void printCompleteTensor(const std::shared_ptr<c10::TensorType>& tensor) {
-  std::cout << "Complete Tensor: ";
-  std::cout << *(tensor->device()) << " ";
-  std::cout << *(tensor->scalarType()) << " ";
-  std::cout << "nDims: " << *(tensor->dim()) << " ";
-  std::cout << std::endl;
-  printSizes(tensor->sizes());
-  std::cout << ", ";
-  printStrides(tensor->strides());
-  std::cout << std::endl;
-  std::cout << "NonCollapsibleDims: " << ::torch::jit::fuser::getNumNonCollapsibleDims(tensor);
-  std::cout << std::endl;
-}
-
-void printValue(const Value* const value) {
-  if (value->isCompleteTensor()) {
-    printCompleteTensor(value->type()->expect<TensorType>());
-  } else if (value->type()->isSubtypeOf(NumberType::get())) {
-    printScalar(value);
-  } else {
-    std::cout << "Request to print unknown value" << std::endl;
-  }
-}
-
-// Returns true if and only if value is a scalar or a complete tensor type
-bool validateValue(const Value* const value, const bool dbg = false) {
-  if (dbg) {
-    printValue(value);
-  }
-
-  if (value->isCompleteTensor() || value->type()->isSubtypeOf(NumberType::get())) {
-    return true;
-  }
-
-  return false;
-}
-
-// Returns true if all inputs and outputs are complete tensors or scalars
-// Note: complete tensor means device, nDims, sizes, and strides are known
-// In particular, all optional values of sizes and strides have values
-bool hasCompleteInputsAndOutputs(const Node* const node, const bool dbg = false) {
-  const auto inputs = node->inputs();
-  const auto outputs = node->outputs();
-
-  if (dbg) {
-    std::cout << "nInputs: " << inputs.size() << std::endl;
-    std::cout << "nOutputs: " << outputs.size() << std::endl;
-  }
-
-  if (dbg) {
-    std::cout << "Inputs: " << std::endl;
-  }
-
-  for (auto i = decltype(inputs.size()){0}; i < inputs.size(); ++i) {
-    if (!validateValue(inputs[i], dbg)) {
-      return false;
-    }
-  }
-
-  if (dbg) {
-    std::cout << "Outputs: " << std::endl;
-  }
-
-  for (auto i = decltype(outputs.size()){0}; i < outputs.size(); ++i) {
-    if (!validateValue(outputs[i], dbg)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-} // namespace
-
-// TODO: create a type for fusion keys
-// TODO: refactor validation
-int tryCreateFusion(const Node* const node) {
-  #if FUSER_DEBUG
-    std::cout << "interface.cpp: tryCreateFusion()" << std::endl;
-    const auto is_complete = hasCompleteInputsAndOutputs(node, true);
-    std::cout << "is_complete: " << is_complete << std::endl;
-  #else
-    const auto is_complete = hasCompleteInputsAndOutputs(node, false);
-  #endif // FUSER_DEBUG
-
-  if (!is_complete) {
-    return -1;
-  }
-
-  // Validates that fusions:
-  // (1) Have a single tensor output
-  // (2) That all tensors are on the same device
-
-  // Validates output
-  const auto& outputs = node->outputs();
-
-  if (outputs.size() != 1) {
-    return -1;
-  }
-
-  const auto& output = node->output();
-
-  if (!(output->isCompleteTensor())) {
-    return -1;
-  }
-
-  // Acquires fusion device
-  const std::shared_ptr<c10::TensorType> out_tensor = output->type()->expect<TensorType>();
-  const auto fusion_device = *(out_tensor->device());
-
-  #if FUSER_DEBUG
-  std::cout << "Fusion Device: " << fusion_device <<std::endl;
-  #endif // FUSER_DEBUG
-
-  // Validate input tensors are all on fusion device
-  const auto inputs = node->inputs();
-  for (auto i = decltype(inputs.size()){0}; i < inputs.size(); ++i) {
-    const std::shared_ptr<c10::TensorType> in_tensor = output->type()->expect<TensorType>();
-    const auto input_device = *(in_tensor->device());
-    if (fusion_device != input_device) {
-      #if FUSER_DEBUG
-        std::cout << "Input device != fusion device: " << input_device << std::endl;
-      #endif // FUSER_DEBUG
-      return -1;
-    }
-  }
-
-  if (fusion_device.type() == c10::kCPU) {
-    #if FUSER_DEBUG
-      std::cout << "Fusing on CPU" << std::endl;
-    #endif // FUSER_DEBUG
-    return torch::jit::fuser::cpu::tryCreateFusion(node);
-  } else if (fusion_device.type() == c10::kCUDA) {
-    #if FUSER_DEBUG
-      std::cout << "Fusing on CUDA" << std::endl;
-    #endif // FUSER_DEBUG
-    return torch::jit::fuser::cuda::tryCreateFusion(node);
-  } else {
-    std::cout << "unknown fusion device: " << fusion_device << std::endl;
-  }
-
-  return -1;
-}
-
-void compileFusion(const Node* const fusion) {
-  const auto fusion_device_type = ::torch::jit::fuser::getFusionDeviceType(fusion);
-  if (fusion_device_type == c10::DeviceType::CPU) {
-    ::torch::jit::fuser::cpu::compileFusion(fusion);
-  }
-}
-
-// Given a node and the key representing the fusion group,
-// returns true if the node can be merged into the fusion group and false
-// if it cannot.
-bool tryMergeNodeWithFusion(const Node* const node, const int fusion_key) {
-  return false;
-}
-
-int fusion_counter = 0;
-std::unordered_map<int, c10::DeviceType> fusion_to_device_map;
-
-std::unordered_map<int, c10::DeviceType> getFusionToDeviceMap() {
-  return fusion_to_device_map;
-}
-
-int getAndIncrementGlobalFusionCounter() {
-  return fusion_counter++;
-}
-
-void callFusion(const int key, Stack& stack) {
-  const auto device_type = fusion_to_device_map[key];
-  std::cout << "Calling fusion on device " << device_type << std::endl;
-
-  if (device_type == c10::kCPU) {
-    torch::jit::fuser::cpu::callFusion(key, stack);
-  }
-}
-
-
-// OLD STUFF BELOW HERE
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 int64_t registerFusion(const Node* fusion_group) {

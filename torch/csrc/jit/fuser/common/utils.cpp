@@ -2,12 +2,92 @@
 
 #include <c10/util/Exception.h>
 
+#include <torch/csrc/jit/fuser/common/tensor_meta.h>
+
 #include <algorithm>
-#include <iostream>
+#include <ostream>
 
 namespace torch {
 namespace jit {
 namespace fuser {
+
+/*
+ * Functions for printing ATen IR
+*/
+
+void printScalar(std::ostream& stream, const Value* const value) {
+  if (value->node()->kind() == prim::Constant) {
+    stream << "Const Scalar: ";
+  } else {
+    stream << "Scalar: ";
+  }
+
+  if (value->type() == FloatType::get()) {
+    stream << "float ";
+    const float val = value->node()->f(attr::value);
+    stream << val;
+  } else if (value->type() == IntType::get()) {
+    stream << "int ";
+    const int val = value->node()->i(attr::value);
+    stream << val;
+  } else {
+    stream << "unknown";
+  }
+  stream << std::endl;
+}
+
+// Note: innermost dimension is at nDims - 1 (when nDims > 0)
+void printStrides(std::ostream& stream, const c10::VaryingStrides& strides) {
+  stream << "Strides=(";
+  for (size_t i = 0; i < *(strides.size()); ++i) {
+    stream << *(strides[i]);
+    if (i != *(strides.size()) - 1) {
+      stream << ", ";
+    } else {
+      stream << ")";
+    }
+  }
+}
+
+void printSizes(std::ostream& stream, const c10::VaryingShape& sizes) {
+  stream << "Sizes=(";
+  for (size_t i = 0; i < *(sizes.size()); ++i) {
+    stream << *(sizes[i]);
+    if (i != *(sizes.size())-1) {
+      stream << ", ";
+    } else {
+      stream << ")";
+    }
+  }
+}
+
+void printCompleteTensor(
+  std::ostream& stream
+, const std::shared_ptr<c10::TensorType>& tensor) {
+  stream << "Complete Tensor: ";
+  stream << *(tensor->device()) << " ";
+  stream << *(tensor->scalarType()) << " ";
+  stream << "nDims: " << *(tensor->dim()) << " ";
+  stream << std::endl;
+  printSizes(stream, tensor->sizes());
+  stream << ", ";
+  printStrides(stream, tensor->strides());
+  stream << std::endl;
+}
+
+void printValue(std::ostream& stream, const Value* const value) {
+  if (value->isCompleteTensor()) {
+    printCompleteTensor(stream, value->type()->expect<TensorType>());
+  } else if (value->type()->isSubtypeOf(NumberType::get())) {
+    printScalar(stream, value);
+  } else {
+    stream << "Request to print unknown value" << std::endl;
+  }
+}
+
+/*
+ * Functions for acquiring devices and device types from ATen IR nodes
+*/
 
 c10::Device getFusionDevice(const Node* const fusion) {
   const std::shared_ptr<c10::TensorType> out_tensor = fusion->outputs()[0]->type()->expect<TensorType>();
@@ -18,6 +98,38 @@ c10::DeviceType getFusionDeviceType(const Node* const node) {
   return getFusionDevice(node).type();
 }
 
+/*
+ * Functions for obtaining parts of complete tensors
+*/
+
+std::vector<int64_t> extractStrides(const std::shared_ptr<c10::TensorType>& tensor) {
+  const c10::VaryingStrides& strides = tensor->strides();
+  const auto size = *(strides.size());
+  std::vector<int64_t> extracted_strides;
+
+  for (auto i = decltype(size){0}; i < size; ++i) {
+    extracted_strides.push_back(*(strides[i]));
+  }
+
+  return extracted_strides;
+}
+
+std::vector<int64_t> extractSizes(const std::shared_ptr<c10::TensorType>& tensor) {
+  const c10::VaryingStrides& sizes = tensor->sizes();
+  const auto size = *(sizes.size());
+  std::vector<int64_t> extracted_sizes;
+
+  for (auto i = decltype(size){0}; i < size; ++i) {
+    extracted_sizes.push_back(*(sizes[i]));
+  }
+
+  return extracted_sizes;
+}
+
+c10::DeviceType getDeviceType(const std::shared_ptr<c10::TensorType>& tensor) {
+  return (*(tensor->device())).type();
+}
+
 size_t getRank(const std::shared_ptr<c10::TensorType>& tensor) {
   return *(tensor->dim());
 }
@@ -26,63 +138,12 @@ size_t getNumel(const std::shared_ptr<c10::TensorType>& tensor) {
   return *(tensor->numel());
 }
 
-size_t getNumNonCollapsibleDims(const std::shared_ptr<c10::TensorType>& tensor) {
-  const c10::VaryingShape& sizes = tensor->sizes();
-  const c10::VaryingStrides& strides = tensor->strides();
+/*
+ * Functions for working with scalar Values
+*/
 
-  const auto nDims = getRank(tensor);
-
-  if (nDims == 0) {
-    return 0;
-  }
-
-  // Finds last dim with size > 1
-  auto last = nDims - 1;
-  for (int i = static_cast<int>(last); i >=0; --i) {
-    const auto size = *(sizes[i]);
-    if (size == 0) {
-      return 0;
-    } else if (size == 1) {
-      continue;
-    } else {
-      last = i;
-      break;
-    }
-  }
-
-  size_t nNonCollapsibleDims = 1;
-  auto collapse_value = *(strides[last]) * *(sizes[last]);
-  for (int i = static_cast<int>(last - 1); i >= 0; --i) {
-    const auto stride = *(strides[i]);
-    const auto size = *(sizes[i]);
-
-    // Tensors with a size of zero are empty
-    // Size 1 dims are always collapsible
-    if (size == 0) {
-      return 0;
-    } else if (size == 1) {
-      continue;
-    }
-
-    if (stride != collapse_value) {
-      ++nNonCollapsibleDims;
-    }
-
-    collapse_value = size * stride;
-  }
-
-  return nNonCollapsibleDims;
-}
-
-float getAsFloat(const Value* const value) {
- if (value->type() == FloatType::get()) {
-   return value->node()->f(attr::value);
- }
- if (value->type() == IntType::get()) {
-   return static_cast<float>(value->node()->i(attr::value));
- }
-
- TORCH_CHECK(false, "getAsFloat() found unknown scalar type!");
+bool isScalar(const Value* const value) {
+  return value->type()->isSubtypeOf(NumberType::get());
 }
 
 c10::optional<float> getFloat(const Value* const value) {
@@ -100,6 +161,21 @@ c10::optional<int> getInt(const Value* const value) {
 
   return c10::nullopt;
 }
+
+float getAsFloat(const Value* const value) {
+ if (value->type() == FloatType::get()) {
+   return value->node()->f(attr::value);
+ }
+ if (value->type() == IntType::get()) {
+   return static_cast<float>(value->node()->i(attr::value));
+ }
+
+ TORCH_CHECK(false, "getAsFloat() found unknown scalar type!");
+}
+
+/*
+ * Functions for comparing complete tensors
+*/
 
 bool haveSameDevice(
   const std::shared_ptr<c10::TensorType>& lhs
@@ -170,135 +246,96 @@ bool haveSameShape(
   && haveSameStrides(lhs, rhs));
 }
 
-// TODO: get device
-TensorMeta collapse(
-  const std::shared_ptr<c10::TensorType>& out
-, const std::shared_ptr<c10::TensorType>& tensor
+/*
+ * Functions for acquiring and working with TensorMetas
+*/
+
+// TODO: assumes only one output
+std::vector<TensorMeta> getLoopMetas(
+  const at::ArrayRef<const Value*> outputs
+, const at::ArrayRef<const Value*> inputs
 ) {
-  // Checks that both tensors have the same rank
-  const auto rank = getRank(out);
-  TORCH_CHECK(getRank(tensor) == rank, "Trying to collapse a tensor with different rank than its output!");
-
-  // Cases:
-  // (1) The tensor has a dimension of size 0 - collapse is 0D
-  // (2) The tensor is broadcast / discontiguous - collapse is 1 + X + Y
-  //      where X is the number of broadcast dimensions (except the innermost)
-  //      and Y is the number of distinct discontiguities
-  // (3) The tensor has no discontiguities and does not broadcast - collapse is 1
-
-  // Checks for 0D tensor (has a dimension with size = 0)
-  const auto numel = getNumel(tensor);
-  if (numel == 0) {
-    return TensorMeta{c10::DeviceType::CPU};
-  }
-
-  // Checks for broadcast discontiguity
-  // Broadcast occurs when this tensor has size 1 in a dim
-  //  out tensor has size != 1.
-  // Discontiguities occur when a dimension and the succeeding dimension
-  //  have the following properties:
-  //    (1) the next dimension is not broadcasting and has size 1
-  //    (2) the next dimension size * stride == the stride of the current dimension
-
-  const c10::VaryingShape& sizes = tensor->sizes();
-  const c10::VaryingStrides& strides = tensor->strides();
-  const c10::VaryingShape& out_sizes = out->sizes();
-
-  std::vector<int64_t> collapsed_sizes;
-  std::vector<int64_t> collapsed_strides;
-
-  int64_t prior_size = -1;
-  int64_t prior_stride = -1;
-
-  auto hasPrior = [&prior_size]() {
-    return (prior_size != -1);
-  };
-
-  auto emitPrior = [&prior_size, &prior_stride, &collapsed_sizes, &collapsed_strides]() {
-    if (prior_size != -1) {
-      collapsed_sizes.emplace_back(prior_size);
-      collapsed_strides.emplace_back(prior_stride);
-    }
-    prior_size = -1;
-    prior_stride = -1;
-  };
-
-  for (auto i = decltype(rank){0}; i < rank; ++i) {
-    const auto size = *(sizes[i]);
-    const auto stride = *(strides[i]);
-    const auto out_size = *(out_sizes[i]);
-
-    // Preservers broadcasts but skips non-broadcasting dimensions of size 1
-    // Non-broadcasting dims of size 1 are skipped
-    //  (unless they are the innermost dim and there are no other dims)
-    if (size == 1) {
-      if (out_size != 1) {
-        emitPrior();
-        collapsed_sizes.emplace_back(1);
-        collapsed_strides.emplace_back(0);
-      } else if (i == rank - 1) {
-        if (hasPrior()) {
-          emitPrior();
-        } else {
-          collapsed_sizes.emplace_back(1);
-          collapsed_strides.emplace_back(0);
-        }
-      }
+  TORCH_CHECK(outputs.size() == 1, "Trying to get loop meta with more than output!");
+  // Creates vector of all (complete) tensors expanded to output rank
+  std::vector<TensorMeta> metas;
+  TensorMeta out_meta{outputs[0]->type()->expect<TensorType>()};
+  const RankType rank = out_meta.rank();
+  metas.push_back(out_meta);
+  for (const auto& input : inputs) {
+    // Skips scalars
+    if (isScalar(input)) {
       continue;
     }
 
-    // If contiguous with prior dimension, merges the prior dim
-    // Otherwise, emits the prior (possibly merged) dim(s) and updates
-    // the tracked size and stride.
-    if (hasPrior() && (size * stride == prior_stride)) {
-      prior_size *= size;
-      prior_stride = stride;
-    } else {
-      emitPrior();
-      prior_size = size;
-      prior_stride = stride;
+    TORCH_CHECK(input->isCompleteTensor(), "Trying to get loop meta with incomplete tensor");
+    const auto tensor_input = input->type()->expect<TensorType>();
+    metas.emplace_back(tensor_input, rank);
+  }
+
+  // Attempts to collapse dimensions
+  // Two sequential dimensions are collapsible iff either of the following is true:
+  //  (A) all the tensors have size 1 for the outer or inner dimension
+  //  (B) all tensors can collapse the outer dim into the inner dim
+  auto i = decltype(rank){0};
+  while (i < (metas[0].rank() - 1)) {
+    // Checks that all sizes are the same
+    const auto outer_size = metas[0].sizes()[i];
+    const auto inner_size = metas[0].sizes()[i + 1];
+
+    bool is_collapsible = true;
+    for (auto j = decltype(metas.size()){0}; j < metas.size(); ++j) {
+      if (outer_size != metas[j].sizes()[i]
+      || inner_size != metas[j].sizes()[i + 1]) {
+        is_collapsible = false;
+        break;
+      }
+
+      if (!metas[j].canCollapse(i)) {
+        is_collapsible = false;
+        break;
+      }
     }
 
-    // Checks for end of array
-    if (i == rank - 1) {
-      emitPrior();
+    if (is_collapsible) {
+      for (auto j = decltype(metas.size()){0}; j < metas.size(); ++j) {
+        metas[j].collapse(i);
+      }
+    } else {
+      ++i;
     }
   }
 
-  return TensorMeta{
-    c10::DeviceType::CPU
-  , std::move(collapsed_sizes)
-  , std::move(collapsed_strides)};
+  return metas;
 }
 
-void printMeta(const TensorMeta& meta) {
-  std::cout << "TensorMeta{" << meta.device_type_ << ", ";
+void printMeta(std::ostream& stream, const TensorMeta& meta) {
+  stream << "TensorMeta{" << meta.device_type_ << ", ";
 
   // print sizes
-  std::cout << "sizes: [";
+  stream << "sizes: [";
   const auto& sizes = meta.sizes();
   for (auto i = decltype(meta.rank()){0}; i < meta.rank(); ++i) {
-    std::cout << sizes[i];
+    stream << sizes[i];
 
     if (i != meta.rank() - 1) {
-      std::cout << ", ";
+      stream << ", ";
     }
   }
-  std::cout << "], ";
+  stream << "], ";
 
   // print strides
-  std::cout << "strides: [";
+  stream << "strides: [";
   const auto& strides = meta.strides();
   for (auto i = decltype(meta.rank()){0}; i < meta.rank(); ++i) {
-    std::cout << strides[i];
+    stream << strides[i];
 
     if (i != meta.rank() - 1) {
-      std::cout << ", ";
+      stream << ", ";
     }
   }
-  std::cout << "]";
+  stream << "]";
 
-  std::cout << "}" << std::endl;
+  stream << "}" << std::endl;
 }
 
 }}} // namespace torch::jit::fuser
