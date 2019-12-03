@@ -87,14 +87,14 @@ bool isFusible(const Node* const node) {
 }
 
 // Returns the key corresponding to the fusion
-int createFusion(const Node* const node) {
+int fuse(const Node* const node) {
   TORCH_CHECK(isFusible(node), "Asked to create an impossible fusion!");
 
   const auto device_type = getFusionDeviceType(node);
 
   switch (device_type) {
     case c10::kCPU:
-      return -1;
+      return cpu::fuseOnCPU(node);
     case c10::kCUDA:
       return -1;
     default:
@@ -104,20 +104,29 @@ int createFusion(const Node* const node) {
   TORCH_CHECK(false, "End of non-void function");
 }
 
-void compileFusion(const Node* const fusion) {
-  // const auto fusion_device_type = ::torch::jit::fuser::getFusionDeviceType(fusion);
-  // if (fusion_device_type == c10::DeviceType::CPU) {
-  //   ::torch::jit::fuser::cpu::compileFusion(fusion);
-  // }
+void compileFusion(Node* fusion) {
+  const auto device_type = getFusionDeviceType(fusion);
+
+  switch (device_type) {
+    case c10::kCPU:
+      cpu::compileFusionOnCPU(fusion);
+      return;
+    case c10::kCUDA:
+      return;
+    default:
+      TORCH_CHECK(false, "Trying to fuse on device type that doesn't support fusion!");
+  }
+
+  TORCH_CHECK(false, "End of function should not be reached!");
 }
 
 // Acquires inputs, allocates outputs, and calls fusion
 // TODO: outputs should be preallocated in the graph (see fusion pass)
-void callFusion(const Node* const node, Stack& stack) {
+void callFusion(const Node* const fusion, Stack& stack) {
   // Acquires inputs
-  const Graph& graph = *node->g(attr::Subgraph);
+  const Graph& graph = *fusion->g(attr::Subgraph);
   const auto nInputs = graph.inputs().size();
-  auto inputs = last(stack, nInputs);
+  at::ArrayRef<IValue> inputs = last(stack, nInputs);
   drop(stack, nInputs);
 
   // Constructs output
@@ -151,7 +160,7 @@ void callFusion(const Node* const node, Stack& stack) {
   const auto device = *(graph.outputs()[0]->type()->expect<TensorType>()->device());
   switch(device.type()) {
     case c10::kCPU:
-      // torch::jit::fuser::cpu::callFusion(key, stack);
+      cpu::callFusionOnCPU(fusion, outputs, inputs);
       return;
     case c10::kCUDA:
       return;
@@ -159,6 +168,7 @@ void callFusion(const Node* const node, Stack& stack) {
       TORCH_CHECK(false, "Acquired an unknown fusion device type!");
   }
 }
+
 
 
 

@@ -246,10 +246,9 @@ RegisterOperators reg(
      Operator(
          prim::FusionGroup,
          [](const Node* node) -> Operation {
-           const auto key = node->i(attr::value);
-           return [key](Stack& stack) {
+           return [node](Stack& stack) {
              RECORD_FUNCTION("FusionGroup", std::vector<c10::IValue>());
-             callFusion(key, stack);
+             callFusion(node, stack);
              return 0;
            };
          },

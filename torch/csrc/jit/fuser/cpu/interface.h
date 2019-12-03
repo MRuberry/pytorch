@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ATen/ATen.h>
 #include <torch/csrc/WindowsTorchApiMacro.h> // TORCH_API
 #include <torch/csrc/jit/ir.h>
 
@@ -10,10 +11,13 @@ namespace cpu {
 
 TORCH_API bool isFusibleOnCPU(const Node* const node);
 
-// TORCH_API int tryCreateFusion(const Node* const node);
+TORCH_API int fuseOnCPU(const Node* const node);
 
-// TORCH_API void compileFusion(const Node* const fusion);
+TORCH_API void compileFusionOnCPU(Node* fusion);
 
-// TORCH_API void callFusion(const int key, Stack& stack);
+TORCH_API void callFusionOnCPU(
+  const Node* const fusion
+, std::vector<at::Tensor>& outputs
+, at::ArrayRef<IValue> inputs);
 
 }}}} // namespace torch::jit::fuser::cpu

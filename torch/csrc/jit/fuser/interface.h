@@ -20,14 +20,15 @@ namespace jit {
 
 #define FUSER_DEBUG 1
 
+// Returns true iff the node is fusible
 TORCH_API bool isFusible(const Node* const node);
 
-// Creates a fusion consisting of just the given node and returns the
+// Creates a fusion consisting of just the given node and returns its
 // corresponding key
-TORCH_API int createFusion(const Node* const node);
+TORCH_API int fuse(const Node* const node);
 
-// Compiles the specified fusion associated with given key
-TORCH_API void compileFusion(const Node* const fusion);
+// Compiles the given fusion node
+TORCH_API void compileFusion(Node* fusion);
 
 // TODO: remove key, it can be acquired from the node
 TORCH_API void callFusion(const Node* const node, Stack& stack);

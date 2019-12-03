@@ -1205,6 +1205,11 @@ void PeepholeOptimizeShapeExpressions(Block* block) {
 
 } // anonymous namespace
 
+
+
+
+// OLD CODE ABOVE
+
 // Replaces given Node n with a fusion group.
 // Notes:
 //  - The fusion node has the same inputs and outputs.
@@ -1276,7 +1281,7 @@ bool FuseBlockHelper(std::shared_ptr<Graph>& graph, Block* block) {
     if (node->kind() == prim::FusionGroup) {
       // TODO
     } else if (isFusible(node)) {
-      const auto fusion_key = createFusion(node);
+      const auto fusion_key = fuse(node);
       auto* fusion = makeFusionNode(fusion_key, graph, node);
       it = fusion->reverseIterator();
       has_changed = true;
@@ -1326,6 +1331,11 @@ void FuseGraph(std::shared_ptr<Graph>& graph) {
     std::cout << *graph << std::endl;
   #endif // FUSER_DEBUG
 }
+
+
+
+
+// OLD CODE BELOW
 
 void CustomFuseGraph(
     std::shared_ptr<Graph>& graph,
